@@ -257,6 +257,34 @@ systemctl --user restart mautrix-imessage
 ./mautrix-imessage-v2 -c data/config.yaml
 ```
 
+### Docker
+
+```bash
+# Build the image
+docker build -t mautrix-imessage .
+
+# First run — generates default config and exits
+docker run -v ./data:/data mautrix-imessage
+# Edit data/config.yaml (see instructions printed by the container)
+
+# Start the bridge
+docker run -d --name mautrix-imessage \
+  -v ./data:/data \
+  -p 8080:8080 \
+  mautrix-imessage
+
+# View logs
+docker logs -f mautrix-imessage
+
+# Login via CLI inside the container
+docker run -it --rm -v ./data:/data \
+  mautrix-imessage login -c /data/config.yaml
+
+# Stop / restart
+docker stop mautrix-imessage
+docker start mautrix-imessage
+```
+
 ### NAC Relay (macOS)
 
 ```bash
