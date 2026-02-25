@@ -10291,6 +10291,7 @@ impl Client {
         body: Option<String>,
         effect: Option<String>,
         subject: Option<String>,
+        caption: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         // Detect voice messages by UTI (CAF files from OGG→CAF remux are voice recordings)
@@ -10321,14 +10322,21 @@ impl Client {
             |_current, _total| {},
         ).await.map_err(|e| WrappedError::GenericError { msg: format!("Failed to upload attachment: {}", e) })?;
 
-        let parts = vec![IndexedMessagePart {
+        let mut parts = vec![IndexedMessagePart {
             part: MessagePart::Attachment(attachment.clone()),
             idx: None,
             ext: None,
         }];
+        if let Some(ref text) = caption {
+            parts.push(IndexedMessagePart {
+                part: MessagePart::Text(text.clone(), TextFormat::default()),
+                idx: None,
+                ext: None,
+            });
+        }
 
-        // Captions are sent via the subject field in the iMessage plist,
-        // not as a separate text part in the XML body.
+        // Keep the legacy body-as-subject behavior while allowing API callers
+        // to set an explicit subject independently from the caption text part.
         let subject = subject.or_else(|| body.clone().filter(|s| !s.is_empty()));
 
         let mut msg = MessageInst::new(
@@ -10362,12 +10370,19 @@ impl Client {
                     using_number: handle.clone(),
                     from_handle: None,
                 };
-                let sms_parts = vec![IndexedMessagePart {
+                let mut sms_parts = vec![IndexedMessagePart {
                     part: MessagePart::Attachment(attachment),
                     idx: None,
                     ext: None,
                 }];
                 let sms_subject = subject.or_else(|| body.filter(|s| !s.is_empty()));
+                if let Some(text) = caption {
+                    sms_parts.push(IndexedMessagePart {
+                        part: MessagePart::Text(text, TextFormat::default()),
+                        idx: None,
+                        ext: None,
+                    });
+                }
                 let mut sms_msg = MessageInst::new(
                     conv,
                     &handle,
@@ -10377,7 +10392,7 @@ impl Client {
                         reply_guid: reply_guid,
                         reply_part: reply_part,
                         service: sms_service,
-                subject: sms_subject,
+                        subject: sms_subject,
                         app: None,
                         link_meta: None,
                         voice: is_voice,

@@ -6728,7 +6728,7 @@ func (c *IMClient) handleMatrixFile(ctx context.Context, msg *bridgev2.MatrixMes
 	replyGuid, replyPart := extractReplyInfo(msg.ReplyTo)
 	// Rust-side send_with_flap_retry handles SendTimedOut retry with a stable
 	// UUID — no Go-side retry here (would orphan delivery receipts).
-	uuid, err := c.client.SendAttachment(conv, data, mimeType, mimeToUTI(mimeType), fileName, c.handle, replyGuid, replyPart, nil, nil, nil)
+	uuid, err := c.client.SendAttachment(conv, data, mimeType, mimeToUTI(mimeType), fileName, c.handle, replyGuid, replyPart, nil, nil, nil, nil)
 	if err != nil {
 		if errors.Is(err, rustpushgo.ErrWrappedErrorNoSmsRelay) {
 			return nil, errNoCarrierRoute

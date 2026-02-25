@@ -22,6 +22,7 @@ type SendMediaRequest struct {
 	ReplyPart *string `json:"reply_part,omitempty"`
 	EffectID  *string `json:"effect_id,omitempty"`
 	Subject   *string `json:"subject,omitempty"`
+	Caption   *string `json:"caption,omitempty"`
 }
 
 type ReactRequest struct {
@@ -127,8 +128,8 @@ type LoginStepResponse struct {
 //   message_receipt — typing, read_receipt, delivered (delivery/read indicators)
 
 type WebhookEvent struct {
-	Type      string `json:"type"`      // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
-	Category  string `json:"category"`  // connection, message, message_update, message_receipt
+	Type      string `json:"type"`     // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
+	Category  string `json:"category"` // connection, message, message_update, message_receipt
 	Timestamp uint64 `json:"timestamp"`
 	Data      any    `json:"data"`
 }

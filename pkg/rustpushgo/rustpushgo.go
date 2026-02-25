@@ -3088,14 +3088,14 @@ func (_self *Client) RetryMmcsFromDescriptor(descriptorJson string, name string)
 		})
 }
 
-func (_self *Client) SendAttachment(conversation WrappedConversation, data []byte, mime string, utiType string, filename string, handle string, replyGuid *string, replyPart *string, body *string, effect *string, subject *string) (string, error) {
+func (_self *Client) SendAttachment(conversation WrappedConversation, data []byte, mime string, utiType string, filename string, handle string, replyGuid *string, replyPart *string, body *string, effect *string, subject *string, caption *string) (string, error) {
 	_pointer := _self.ffiObject.incrementPointer("*Client")
 	defer _self.ffiObject.decrementPointer()
 	return uniffiRustCallAsyncWithErrorAndResult(
 		FfiConverterTypeWrappedError{}, func(status *C.RustCallStatus) *C.void {
 			// rustFutureFunc
 			return (*C.void)(C.uniffi_rustpushgo_fn_method_client_send_attachment(
-				_pointer, rustBufferToC(FfiConverterTypeWrappedConversationINSTANCE.Lower(conversation)), rustBufferToC(FfiConverterBytesINSTANCE.Lower(data)), rustBufferToC(FfiConverterStringINSTANCE.Lower(mime)), rustBufferToC(FfiConverterStringINSTANCE.Lower(utiType)), rustBufferToC(FfiConverterStringINSTANCE.Lower(filename)), rustBufferToC(FfiConverterStringINSTANCE.Lower(handle)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(replyGuid)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(replyPart)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(body)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(effect)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(subject)),
+				_pointer, rustBufferToC(FfiConverterTypeWrappedConversationINSTANCE.Lower(conversation)), rustBufferToC(FfiConverterBytesINSTANCE.Lower(data)), rustBufferToC(FfiConverterStringINSTANCE.Lower(mime)), rustBufferToC(FfiConverterStringINSTANCE.Lower(utiType)), rustBufferToC(FfiConverterStringINSTANCE.Lower(filename)), rustBufferToC(FfiConverterStringINSTANCE.Lower(handle)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(replyGuid)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(replyPart)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(body)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(effect)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(subject)), rustBufferToC(FfiConverterOptionalStringINSTANCE.Lower(caption)),
 				status,
 			))
 		},

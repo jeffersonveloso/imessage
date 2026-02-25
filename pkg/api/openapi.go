@@ -83,7 +83,8 @@ const openapiSpec = `{
           "reply_to": { "type": "string" },
           "reply_part": { "type": "string" },
           "effect_id": { "type": "string", "description": "iMessage bubble/screen effect ID" },
-          "subject": { "type": "string", "description": "Bold subject line displayed above the message body" }
+          "subject": { "type": "string", "description": "Bold subject line displayed above the message body" },
+          "caption": { "type": "string", "description": "Text caption sent alongside the attachment" }
         },
         "required": ["to", "data", "mime_type", "filename"]
       },
