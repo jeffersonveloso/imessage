@@ -51,6 +51,9 @@ type PersistedSessionState struct {
 
 	// Cached MobileMe delegate for seeding on restore
 	MmeDelegateJSON string `json:"mme_delegate_json,omitempty"`
+
+	// Caller-provided instance ID echoed in every webhook event.
+	InstanceID string `json:"instance_id,omitempty"`
 }
 
 // sessionFilePath returns the path to the persisted session state file:

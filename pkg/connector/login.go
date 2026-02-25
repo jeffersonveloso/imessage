@@ -802,6 +802,11 @@ func completeLoginWithMeta(
 		log.Warn().Msg("No account persist data from login — cloud services will not be available")
 	}
 
+	// Capture instance_id from the API server so it gets persisted.
+	if main.apiServer != nil {
+		meta.InstanceID = main.apiServer.GetInstanceID()
+	}
+
 	// Persist full session state to backup file so it survives DB resets.
 	saveSessionState(log, PersistedSessionState{
 		IDSIdentity:              meta.IDSIdentity,
@@ -818,6 +823,7 @@ func completeLoginWithMeta(
 		AccountDSID:              meta.AccountDSID,
 		AccountSPDBase64:         meta.AccountSPDBase64,
 		MmeDelegateJSON:          meta.MmeDelegateJSON,
+		InstanceID:               meta.InstanceID,
 	})
 
 	loginID := networkid.UserLoginID(result.Users.LoginId(0))

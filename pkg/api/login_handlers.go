@@ -102,6 +102,8 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.SetInstanceID(req.InstanceID)
+
 	session, err := s.loginProvider.StartLogin(r.Context(), req.Flow)
 	if err != nil {
 		s.log.Err(err).Str("flow", req.Flow).Msg("Failed to start login")

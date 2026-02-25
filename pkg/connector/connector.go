@@ -115,6 +115,16 @@ func (c *IMConnector) Start(ctx context.Context) error {
 			WebhookURL:    c.Config.API.WebhookURL,
 			WebhookSecret: c.Config.API.WebhookSecret,
 		}, c, &loginAdapter{connector: c}, log)
+
+		// Restore instance_id from existing login metadata (covers auto-restore
+		// case where LoadUserLogin ran before the API server was created).
+		for _, login := range c.Bridge.GetAllCachedUserLogins() {
+			if meta, ok := login.Metadata.(*UserLoginMetadata); ok && meta.InstanceID != "" {
+				c.apiServer.SetInstanceID(meta.InstanceID)
+				break
+			}
+		}
+
 		c.apiServer.Start()
 	}
 
@@ -219,6 +229,7 @@ func (c *IMConnector) tryAutoRestore(ctx context.Context) {
 		AccountDSID:              state.AccountDSID,
 		AccountSPDBase64:         state.AccountSPDBase64,
 		MmeDelegateJSON:          state.MmeDelegateJSON,
+		InstanceID:               state.InstanceID,
 	}
 
 	_, err = user.NewLogin(ctx, &database.UserLogin{
@@ -320,7 +331,13 @@ func (c *IMConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserLog
 		AccountDSID:              meta.AccountDSID,
 		AccountSPDBase64:         meta.AccountSPDBase64,
 		MmeDelegateJSON:          meta.MmeDelegateJSON,
+		InstanceID:               meta.InstanceID,
 	})
+
+	// Restore instance_id on the webhook dispatcher.
+	if c.apiServer != nil && meta.InstanceID != "" {
+		c.apiServer.SetInstanceID(meta.InstanceID)
+	}
 
 	client := &IMClient{
 		Main:               c,

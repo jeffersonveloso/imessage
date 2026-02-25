@@ -15,10 +15,11 @@ import (
 
 // WebhookDispatcher sends event notifications to an external HTTP endpoint.
 type WebhookDispatcher struct {
-	url    string
-	secret string
-	client *http.Client
-	log    zerolog.Logger
+	url        string
+	secret     string
+	instanceID string
+	client     *http.Client
+	log        zerolog.Logger
 }
 
 // NewWebhookDispatcher creates a dispatcher that POSTs JSON events to url.
@@ -33,8 +34,20 @@ func NewWebhookDispatcher(url, secret string, log zerolog.Logger) *WebhookDispat
 	}
 }
 
+// SetInstanceID sets the caller-provided instance ID that will be included
+// in every dispatched webhook event.
+func (w *WebhookDispatcher) SetInstanceID(id string) {
+	w.instanceID = id
+}
+
+// GetInstanceID returns the current instance ID.
+func (w *WebhookDispatcher) GetInstanceID() string {
+	return w.instanceID
+}
+
 // Dispatch sends the event asynchronously. It never blocks the caller.
 func (w *WebhookDispatcher) Dispatch(event WebhookEvent) {
+	event.InstanceID = w.instanceID
 	go w.deliver(event)
 }
 

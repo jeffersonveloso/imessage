@@ -109,6 +109,21 @@ func (s *Server) Webhook() *WebhookDispatcher {
 	return s.webhook
 }
 
+// SetInstanceID sets the caller-provided instance ID on the webhook dispatcher.
+func (s *Server) SetInstanceID(id string) {
+	if s.webhook != nil {
+		s.webhook.SetInstanceID(id)
+	}
+}
+
+// GetInstanceID returns the current instance ID from the webhook dispatcher.
+func (s *Server) GetInstanceID() string {
+	if s.webhook != nil {
+		return s.webhook.GetInstanceID()
+	}
+	return ""
+}
+
 // authMiddleware validates the Bearer token on every request.
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
