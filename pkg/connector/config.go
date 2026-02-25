@@ -152,6 +152,23 @@ type IMConfig struct {
 	// message bodies in our DB). This does NOT undo deletes/unsends — content
 	// you delete or retract is still purged. Re-deletes nothing from Matrix.
 	DebugDisablePrivacy bool `yaml:"debug_disable_privacy"`
+
+	// API exposes an HTTP REST API for sending iMessages directly.
+	API APIConfig `yaml:"api"`
+}
+
+// APIConfig configures the optional HTTP REST API server.
+type APIConfig struct {
+	// Enabled controls whether the HTTP API server starts.
+	Enabled bool `yaml:"enabled"`
+	// Listen is the address:port to bind (e.g. "0.0.0.0:8080").
+	Listen string `yaml:"listen"`
+	// APIKey is the Bearer token required for all API requests.
+	APIKey string `yaml:"api_key"`
+	// WebhookURL is the URL to POST incoming event notifications to.
+	WebhookURL string `yaml:"webhook_url"`
+	// WebhookSecret is the HMAC-SHA256 key used to sign webhook payloads.
+	WebhookSecret string `yaml:"webhook_secret"`
 }
 
 // CardDAVConfig configures an external CardDAV server for contact name resolution.
@@ -255,6 +272,11 @@ func upgradeConfig(helper up.Helper) {
 	helper.Copy(up.Str, "carddav", "username")
 	helper.Copy(up.Str, "carddav", "password_encrypted")
 	helper.Copy(up.Bool, "debug_disable_privacy")
+	helper.Copy(up.Bool, "api", "enabled")
+	helper.Copy(up.Str, "api", "listen")
+	helper.Copy(up.Str, "api", "api_key")
+	helper.Copy(up.Str, "api", "webhook_url")
+	helper.Copy(up.Str, "api", "webhook_secret")
 }
 
 func (c *IMConnector) GetConfig() (string, any, up.Upgrader) {
