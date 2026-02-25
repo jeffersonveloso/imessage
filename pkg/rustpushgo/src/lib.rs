@@ -16,7 +16,7 @@ use rustpush::{
     IDSNGMIdentity, IDSUser, IMClient, LoginDelegate, MADRID_SERVICE, MMCSFile, Message,
     MessageInst, MessagePart, MessageParts, MessageType, MoveToRecycleBinMessage, NormalMessage, PermanentDeleteMessage,
     OperatedChat, OSConfig, ReactMessage, ReactMessageType, Reaction, UnsendMessage,
-    IndexedMessagePart, LinkMeta, LPLinkMetadata, RichLinkImageAttachmentSubstitute, NSURL,
+    IndexedMessagePart, LinkMeta, LPLinkMetadata, RichLinkImageAttachmentSubstitute, NSURL, TextFormat,
     TokenProvider,
     cloudkit::{ZoneDeleteOperation, CloudKitSession},
     util::{base64_decode, encode_hex, ResourceState},
@@ -2759,6 +2759,7 @@ impl Client {
         reply_part: Option<String>,
         effect: Option<String>,
         subject: Option<String>,
+        caption: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         // Detect voice messages by UTI (CAF files from OGG→CAF remux are voice recordings)
@@ -2789,11 +2790,18 @@ impl Client {
             |_current, _total| {},
         ).await.map_err(|e| WrappedError::GenericError { msg: format!("Failed to upload attachment: {}", e) })?;
 
-        let parts = vec![IndexedMessagePart {
+        let mut parts = vec![IndexedMessagePart {
             part: MessagePart::Attachment(attachment.clone()),
             idx: None,
             ext: None,
         }];
+        if let Some(ref text) = caption {
+            parts.push(IndexedMessagePart {
+                part: MessagePart::Text(text.clone(), TextFormat::default()),
+                idx: None,
+                ext: None,
+            });
+        }
 
         let mut msg = MessageInst::new(
             conv.clone(),
@@ -2821,11 +2829,18 @@ impl Client {
                     using_number: handle.clone(),
                     from_handle: None,
                 };
-                let sms_parts = vec![IndexedMessagePart {
+                let mut sms_parts = vec![IndexedMessagePart {
                     part: MessagePart::Attachment(attachment),
                     idx: None,
                     ext: None,
                 }];
+                if let Some(text) = caption {
+                    sms_parts.push(IndexedMessagePart {
+                        part: MessagePart::Text(text, TextFormat::default()),
+                        idx: None,
+                        ext: None,
+                    });
+                }
                 let mut sms_msg = MessageInst::new(
                     conv,
                     &handle,

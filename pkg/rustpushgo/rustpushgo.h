@@ -154,6 +154,7 @@ void* uniffi_rustpushgo_fn_method_client_send_attachment(
 	RustBuffer reply_part,
 	RustBuffer effect,
 	RustBuffer subject,
+	RustBuffer caption,
 	RustCallStatus* out_status
 );
 

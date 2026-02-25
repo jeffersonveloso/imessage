@@ -2092,7 +2092,7 @@ func (c *IMClient) handleMatrixFile(ctx context.Context, msg *bridgev2.MatrixMes
 	_ = matrixEdited
 
 	replyGuid, replyPart := extractReplyInfo(msg.ReplyTo)
-	uuid, err := c.client.SendAttachment(conv, data, mimeType, mimeToUTI(mimeType), fileName, c.handle, replyGuid, replyPart, nil, nil)
+	uuid, err := c.client.SendAttachment(conv, data, mimeType, mimeToUTI(mimeType), fileName, c.handle, replyGuid, replyPart, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send attachment: %w", err)
 	}

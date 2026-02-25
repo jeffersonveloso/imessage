@@ -22,6 +22,7 @@ type SendMediaRequest struct {
 	ReplyPart *string `json:"reply_part,omitempty"`
 	EffectID  *string `json:"effect_id,omitempty"`
 	Subject   *string `json:"subject,omitempty"`
+	Caption   *string `json:"caption,omitempty"`
 }
 
 type ReactRequest struct {
