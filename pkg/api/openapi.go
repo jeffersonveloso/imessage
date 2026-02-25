@@ -66,7 +66,9 @@ const openapiSpec = `{
           "text": { "type": "string", "example": "Hello from the API!" },
           "is_sms": { "type": "boolean", "default": false },
           "reply_to": { "type": "string", "description": "UUID of message to reply to" },
-          "reply_part": { "type": "string" }
+          "reply_part": { "type": "string" },
+          "effect_id": { "type": "string", "description": "iMessage bubble/screen effect ID (e.g. com.apple.MobileSMS.expressivesend.impact, .gentle, .loud, .invisibleink, com.apple.messages.effect.CKHeartEffect)" },
+          "subject": { "type": "string", "description": "Bold subject line displayed above the message body" }
         },
         "required": ["to", "text"]
       },
@@ -79,7 +81,9 @@ const openapiSpec = `{
           "filename": { "type": "string", "example": "photo.jpg" },
           "is_sms": { "type": "boolean", "default": false },
           "reply_to": { "type": "string" },
-          "reply_part": { "type": "string" }
+          "reply_part": { "type": "string" },
+          "effect_id": { "type": "string", "description": "iMessage bubble/screen effect ID" },
+          "subject": { "type": "string", "description": "Bold subject line displayed above the message body" }
         },
         "required": ["to", "data", "mime_type", "filename"]
       },

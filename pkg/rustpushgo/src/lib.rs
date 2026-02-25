@@ -9456,6 +9456,8 @@ impl Client {
         reply_guid: Option<String>,
         reply_part: Option<String>,
         scheduled_ms: Option<u64>,
+        effect: Option<String>,
+        subject: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         let service = if conversation.is_sms {
@@ -9537,11 +9539,11 @@ impl Client {
         let normal = if let Some(parts) = parts {
             NormalMessage {
                 parts,
-                effect: None,
+                effect: effect.clone(),
                 reply_guid: reply_guid.clone(),
                 reply_part: reply_part.clone(),
                 service: service.clone(),
-                subject: None,
+                subject: subject.clone(),
                 app: None,
                 link_meta,
                 voice: false,
@@ -9554,6 +9556,8 @@ impl Client {
             n.reply_guid = reply_guid.clone();
             n.reply_part = reply_part.clone();
             n.scheduled = schedule;
+            n.effect = effect.clone();
+            n.subject = subject.clone();
             n
         };
         let mut msg = MessageInst::new(
@@ -10285,6 +10289,8 @@ impl Client {
         reply_guid: Option<String>,
         reply_part: Option<String>,
         body: Option<String>,
+        effect: Option<String>,
+        subject: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         // Detect voice messages by UTI (CAF files from OGG→CAF remux are voice recordings)
@@ -10323,18 +10329,18 @@ impl Client {
 
         // Captions are sent via the subject field in the iMessage plist,
         // not as a separate text part in the XML body.
-        let subject = body.clone().filter(|s| !s.is_empty());
+        let subject = subject.or_else(|| body.clone().filter(|s| !s.is_empty()));
 
         let mut msg = MessageInst::new(
             conv.clone(),
             &handle,
             Message::Message(NormalMessage {
                 parts: MessageParts(parts),
-                effect: None,
+                effect: effect.clone(),
                 reply_guid: reply_guid.clone(),
                 reply_part: reply_part.clone(),
                 service,
-                subject,
+                subject: subject.clone(),
                 app: None,
                 link_meta: None,
                 voice: is_voice,
@@ -10361,17 +10367,17 @@ impl Client {
                     idx: None,
                     ext: None,
                 }];
-                let sms_subject = body.filter(|s| !s.is_empty());
+                let sms_subject = subject.or_else(|| body.filter(|s| !s.is_empty()));
                 let mut sms_msg = MessageInst::new(
                     conv,
                     &handle,
                     Message::Message(NormalMessage {
                         parts: MessageParts(sms_parts),
-                        effect: None,
+                        effect: effect,
                         reply_guid: reply_guid,
                         reply_part: reply_part,
                         service: sms_service,
-                        subject: sms_subject,
+                subject: sms_subject,
                         app: None,
                         link_meta: None,
                         voice: is_voice,

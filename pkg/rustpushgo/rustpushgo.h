@@ -328,6 +328,8 @@ void* uniffi_rustpushgo_fn_method_client_send_attachment(
 	RustBuffer reply_guid,
 	RustBuffer reply_part,
 	RustBuffer body,
+	RustBuffer effect,
+	RustBuffer subject,
 	RustCallStatus* out_status
 );
 
@@ -400,6 +402,8 @@ void* uniffi_rustpushgo_fn_method_client_send_message(
 	RustBuffer reply_guid,
 	RustBuffer reply_part,
 	RustBuffer scheduled_ms,
+	RustBuffer effect,
+	RustBuffer subject,
 	RustCallStatus* out_status
 );
 
@@ -2058,4 +2062,3 @@ int32_t rustpushgo_cgo_MessageCallback(uint64_t, int32_t, uint8_t *, int32_t, Ru
 int32_t rustpushgo_cgo_RustLogSink(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
 int32_t rustpushgo_cgo_StatusCallback(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
 int32_t rustpushgo_cgo_UpdateUsersCallback(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
-

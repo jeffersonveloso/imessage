@@ -8,6 +8,8 @@ type SendRequest struct {
 	IsSMS     bool    `json:"is_sms,omitempty"`
 	ReplyTo   *string `json:"reply_to,omitempty"`
 	ReplyPart *string `json:"reply_part,omitempty"`
+	EffectID  *string `json:"effect_id,omitempty"`
+	Subject   *string `json:"subject,omitempty"`
 }
 
 type SendMediaRequest struct {
@@ -18,6 +20,8 @@ type SendMediaRequest struct {
 	IsSMS     bool    `json:"is_sms,omitempty"`
 	ReplyTo   *string `json:"reply_to,omitempty"`
 	ReplyPart *string `json:"reply_part,omitempty"`
+	EffectID  *string `json:"effect_id,omitempty"`
+	Subject   *string `json:"subject,omitempty"`
 }
 
 type ReactRequest struct {
