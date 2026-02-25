@@ -10,6 +10,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/id"
 
+	"github.com/lrhodin/imessage/pkg/api"
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
 
@@ -29,11 +31,24 @@ func isRunningOnMacOS() bool {
 }
 
 type IMConnector struct {
-	Bridge *bridgev2.Bridge
-	Config IMConfig
+	Bridge    *bridgev2.Bridge
+	Config    IMConfig
+	apiServer *api.Server
 }
 
 var _ bridgev2.NetworkConnector = (*IMConnector)(nil)
+var _ api.IMClientProvider = (*IMConnector)(nil)
+
+// GetActiveClient returns the first connected IMClient wrapped in an adapter
+// that satisfies api.IMClient. Implements api.IMClientProvider.
+func (c *IMConnector) GetActiveClient() (api.IMClient, error) {
+	for _, login := range c.Bridge.GetAllCachedUserLogins() {
+		if client, ok := login.Client.(*IMClient); ok && client.IsLoggedIn() {
+			return &imClientAdapter{client: client}, nil
+		}
+	}
+	return nil, errors.New("no active iMessage connection")
+}
 
 func (c *IMConnector) GetName() bridgev2.BridgeName {
 	return bridgev2.BridgeName{
@@ -90,6 +105,18 @@ func (c *IMConnector) Start(ctx context.Context) error {
 	// state (session.json + keystore), create a user_login from the backup
 	// instead of requiring a full re-login.
 	c.tryAutoRestore(ctx)
+
+	// Start the HTTP API server if configured.
+	if c.Config.API.Enabled {
+		log := c.Bridge.Log.With().Str("component", "http_api").Logger()
+		c.apiServer = api.New(api.Config{
+			Listen:        c.Config.API.Listen,
+			APIKey:        c.Config.API.APIKey,
+			WebhookURL:    c.Config.API.WebhookURL,
+			WebhookSecret: c.Config.API.WebhookSecret,
+		}, c, &loginAdapter{connector: c}, log)
+		c.apiServer.Start()
+	}
 
 	return nil
 }

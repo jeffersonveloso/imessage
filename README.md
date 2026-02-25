@@ -243,6 +243,136 @@ launchctl kickstart -k gui/$(id -u)/com.imessage.nac-relay
 launchctl bootout gui/$(id -u)/com.imessage.nac-relay
 ```
 
+## HTTP REST API
+
+The bridge includes an optional HTTP REST API for sending and receiving iMessages without Matrix. Enable it in your config:
+
+```yaml
+network:
+  api:
+    enabled: true
+    listen: "0.0.0.0:8080"
+    api_key: ""          # generate with: openssl rand -hex 32
+    webhook_url: ""      # URL to receive incoming events (optional)
+    webhook_secret: ""   # HMAC-SHA256 key for webhook signatures (optional)
+```
+
+All endpoints (except docs) require a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/status
+```
+
+### Documentation
+
+- **Swagger UI**: http://localhost:8080/api/v1/docs (no auth required)
+- **OpenAPI spec**: http://localhost:8080/api/v1/openapi.json (no auth required)
+
+### Login via API
+
+The API exposes the same login flows available in the Matrix bot and CLI, allowing external apps to authenticate without Matrix.
+
+```bash
+# 1. List available login flows
+curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/v1/login/flows
+
+# 2. Start login (external-key flow for cross-platform, apple-id for macOS)
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"flow":"external-key"}' http://localhost:8080/api/v1/login/start
+# Returns: session_id + first step (hardware_key field)
+
+# 3. Submit hardware key (base64 from Mac-Hardware-Info)
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"session_id":"...","input":{"hardware_key":"base64..."}}' \
+  http://localhost:8080/api/v1/login/step
+# Returns: next step (Apple ID + password fields)
+
+# 4. Submit Apple ID credentials
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"session_id":"...","input":{"username":"you@icloud.com","password":"..."}}' \
+  http://localhost:8080/api/v1/login/step
+# Returns: next step (2FA code field)
+
+# 5. Submit 2FA code
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"session_id":"...","input":{"code":"123456"}}' \
+  http://localhost:8080/api/v1/login/step
+# Returns: handle selection (or complete if only one handle)
+
+# 6. Select handle
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"session_id":"...","input":{"handle":"tel:+15551234567"}}' \
+  http://localhost:8080/api/v1/login/step
+# Returns: {"complete": {"login_id": "...", "message": "Successfully logged in..."}}
+```
+
+Login sessions expire after 10 minutes of inactivity.
+
+### Sending Messages
+
+```bash
+# Send text
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"to":"tel:+15551234567","text":"Hello!"}' \
+  http://localhost:8080/api/v1/send
+
+# Send media (base64-encoded)
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"to":"tel:+15551234567","data":"base64...","mime_type":"image/jpeg","filename":"photo.jpg"}' \
+  http://localhost:8080/api/v1/send-media
+
+# Send reaction
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"to":"tel:+15551234567","target_uuid":"msg-uuid","reaction":"heart"}' \
+  http://localhost:8080/api/v1/react
+
+# Validate if targets are on iMessage
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"targets":["tel:+15551234567","mailto:user@example.com"]}' \
+  http://localhost:8080/api/v1/validate
+```
+
+### Webhooks
+
+When `webhook_url` is configured, the API POSTs JSON events for incoming messages and status changes:
+
+| Event | Description |
+|-------|-------------|
+| `message` | New incoming message (text, attachments) |
+| `reaction` | Tapback/reaction received |
+| `typing` | Typing indicator |
+| `read_receipt` | Message read by recipient |
+| `delivered` | Message delivered to recipient |
+| `edit` | Message edited |
+| `unsend` | Message unsent |
+| `connected` | iMessage session connected |
+| `disconnected` | iMessage session disconnected |
+
+Each request includes:
+- `X-Webhook-Event` header with the event type
+- `X-Webhook-Signature` header with HMAC-SHA256 hex digest of the body (if `webhook_secret` is set)
+- Automatic retry with backoff (3 attempts: 1s, 2s, 4s)
+
+### API Endpoints Summary
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/status` | Connection status |
+| GET | `/api/v1/handles` | List registered handles |
+| POST | `/api/v1/validate` | Check if targets are on iMessage |
+| POST | `/api/v1/send` | Send text message |
+| POST | `/api/v1/send-media` | Send media attachment |
+| POST | `/api/v1/react` | Send reaction/tapback |
+| POST | `/api/v1/edit` | Edit a sent message |
+| POST | `/api/v1/unsend` | Unsend a message |
+| POST | `/api/v1/typing` | Send typing indicator |
+| POST | `/api/v1/read-receipt` | Send read receipt |
+| GET | `/api/v1/login/flows` | List login flows |
+| POST | `/api/v1/login/start` | Start login session |
+| POST | `/api/v1/login/step` | Submit login step input |
+| GET | `/api/v1/openapi.json` | OpenAPI 3.0 spec (no auth) |
+| GET | `/api/v1/docs` | Swagger UI (no auth) |
+
 ## Configuration
 
 Config lives in `data/config.yaml` (generated during install). To reconfigure from scratch:
@@ -277,10 +407,20 @@ make clean      # Remove build artifacts
 
 ```
 cmd/mautrix-imessage/        # Entrypoint
+pkg/api/                     # HTTP REST API (independent of Matrix)
+  ├── server.go              #   HTTP server, auth middleware, routing
+  ├── handlers.go            #   send/query endpoint handlers
+  ├── login_handlers.go      #   login flow endpoint handlers
+  ├── webhook.go             #   webhook dispatcher (HMAC-SHA256, retry)
+  ├── openapi.go             #   OpenAPI 3.0 spec + Swagger UI
+  ├── types.go               #   request/response/webhook structs
+  └── interfaces.go          #   IMClient + LoginProvider interfaces
 pkg/connector/               # bridgev2 connector
   ├── connector.go           #   bridge lifecycle + platform detection
   ├── client.go              #   send/receive/reactions/edits/typing
   ├── login.go               #   Apple ID + external key login flows
+  ├── api_adapter.go         #   adapts IMClient for pkg/api
+  ├── login_adapter.go       #   adapts login flows for pkg/api
   ├── chatdb.go              #   chat.db backfill + contacts (macOS)
   ├── ids.go                 #   identifier/portal ID conversion
   ├── capabilities.go        #   supported features

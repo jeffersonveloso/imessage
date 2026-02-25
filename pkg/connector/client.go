@@ -48,6 +48,7 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"github.com/lrhodin/imessage/imessage"
+	"github.com/lrhodin/imessage/pkg/api"
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
 
@@ -659,6 +660,18 @@ func (c *IMClient) Connect(ctx context.Context) {
 
 	c.UserLogin.BridgeState.Send(status.BridgeState{StateEvent: status.StateConnected})
 
+	// Notify webhook consumers that the connection is up.
+	if srv := c.Main.apiServer; srv != nil && srv.Webhook() != nil {
+		srv.Webhook().Dispatch(api.WebhookEvent{
+			Type:      "connected",
+			Timestamp: uint64(time.Now().UnixMilli()),
+			Data: api.WebhookConnectionData{
+				Handle:     c.handle,
+				AllHandles: c.allHandles,
+			},
+		})
+	}
+
 	// Set up contact source: external CardDAV if configured, else iCloud
 	if c.Main.Config.CardDAV.IsConfigured() {
 		c.contacts = newExternalCardDAVClient(c.Main.Config.CardDAV, log)
@@ -709,6 +722,18 @@ func (c *IMClient) Connect(ctx context.Context) {
 }
 
 func (c *IMClient) Disconnect() {
+	// Notify webhook consumers before tearing down.
+	if srv := c.Main.apiServer; srv != nil && srv.Webhook() != nil {
+		srv.Webhook().Dispatch(api.WebhookEvent{
+			Type:      "disconnected",
+			Timestamp: uint64(time.Now().UnixMilli()),
+			Data: api.WebhookConnectionData{
+				Handle:     c.handle,
+				AllHandles: c.allHandles,
+			},
+		})
+	}
+
 	if c.msgBuffer != nil {
 		c.msgBuffer.stop()
 	}
@@ -752,6 +777,9 @@ func (c *IMClient) OnMessage(msg rustpushgo.WrappedMessage) {
 		Str("component", "imessage").
 		Str("msg_uuid", msg.Uuid).
 		Logger()
+
+	// Dispatch webhook event (non-blocking).
+	c.dispatchWebhookEvent(msg)
 
 	// Send delivery receipt if requested
 	if msg.SendDelivered && msg.Sender != nil && !msg.IsDelivered && !msg.IsReadReceipt {
@@ -841,6 +869,92 @@ func (c *IMClient) dispatchBuffered(msg rustpushgo.WrappedMessage) {
 	}
 
 	c.handleMessage(log, msg)
+}
+
+// dispatchWebhookEvent converts a WrappedMessage into a WebhookEvent and
+// dispatches it via the API server's webhook. This is non-blocking.
+func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
+	srv := c.Main.apiServer
+	if srv == nil || srv.Webhook() == nil {
+		return
+	}
+
+	var eventType string
+	var data any
+
+	sender := ptrStringOr(msg.Sender, "")
+
+	switch {
+	case msg.IsDelivered:
+		eventType = "delivered"
+		data = api.WebhookDeliveredData{
+			Sender:       sender,
+			Participants: msg.Participants,
+		}
+	case msg.IsReadReceipt:
+		eventType = "read_receipt"
+		data = api.WebhookReadReceiptData{
+			Sender:       sender,
+			Participants: msg.Participants,
+		}
+	case msg.IsTyping:
+		eventType = "typing"
+		data = api.WebhookTypingData{
+			Sender:       sender,
+			Typing:       true,
+			Participants: msg.Participants,
+		}
+	case msg.IsUnsend:
+		eventType = "unsend"
+		data = api.WebhookUnsendData{
+			UUID:       msg.Uuid,
+			Sender:     sender,
+			TargetUUID: ptrStringOr(msg.UnsendTargetUuid, ""),
+		}
+	case msg.IsTapback:
+		eventType = "reaction"
+		data = api.WebhookReactionData{
+			UUID:       msg.Uuid,
+			Sender:     sender,
+			TargetUUID: ptrStringOr(msg.TapbackTargetUuid, ""),
+			TargetPart: msg.TapbackTargetPart,
+			Reaction:   msg.TapbackType,
+			Emoji:      msg.TapbackEmoji,
+			Remove:     msg.TapbackRemove,
+		}
+	case msg.IsEdit:
+		eventType = "edit"
+		data = api.WebhookEditData{
+			UUID:       msg.Uuid,
+			Sender:     sender,
+			TargetUUID: ptrStringOr(msg.EditTargetUuid, ""),
+			NewText:    msg.EditNewText,
+		}
+	case msg.IsError, msg.IsPeerCacheInvalidate, msg.IsMoveToRecycleBin,
+		msg.IsPermanentDelete, msg.IsRename, msg.IsParticipantChange, msg.IsIconChange:
+		// Internal/control events — not dispatched via webhook.
+		return
+	default:
+		// Regular message
+		eventType = "message"
+		data = api.WebhookMessageData{
+			UUID:          msg.Uuid,
+			Sender:        sender,
+			Text:          msg.Text,
+			Subject:       msg.Subject,
+			Participants:  msg.Participants,
+			GroupName:     msg.GroupName,
+			IsSMS:         msg.IsSms,
+			ReplyTo:       msg.ReplyGuid,
+			HasAttachment: len(msg.Attachments) > 0,
+		}
+	}
+
+	srv.Webhook().Dispatch(api.WebhookEvent{
+		Type:      eventType,
+		Timestamp: msg.TimestampMs,
+		Data:      data,
+	})
 }
 
 // flushPendingPortalMsgs replays messages that were held during the CloudKit

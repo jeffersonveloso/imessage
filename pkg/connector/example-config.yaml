@@ -28,3 +28,21 @@ carddav:
     username: ""
     # Encrypted app password (set by carddav-setup command).
     password_encrypted: ""
+
+# HTTP REST API for sending iMessages directly (bypasses Matrix).
+# When enabled, an HTTP server starts on the configured address and accepts
+# JSON requests authenticated with a Bearer token.
+api:
+    # Enable the HTTP API server.
+    enabled: false
+    # Address and port to listen on.
+    listen: "0.0.0.0:8080"
+    # Bearer token required for all API requests.
+    # Generate one with: openssl rand -hex 32
+    api_key: ""
+    # URL to receive webhook events (incoming messages, typing, read receipts, etc.).
+    # Leave empty to disable webhooks.
+    webhook_url: ""
+    # HMAC-SHA256 secret for webhook signature verification.
+    # Generate one with: openssl rand -hex 32
+    webhook_secret: ""
