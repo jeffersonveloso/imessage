@@ -16,6 +16,7 @@ var _ api.IMClient = (*imClientAdapter)(nil)
 func (a *imClientAdapter) Handle() string        { return a.client.handle }
 func (a *imClientAdapter) AllHandles() []string   { return a.client.allHandles }
 func (a *imClientAdapter) IsLoggedIn() bool       { return a.client.IsLoggedIn() }
+func (a *imClientAdapter) Disconnect()            { a.client.Disconnect() }
 func (a *imClientAdapter) NormalizeIdentifier(id string) string {
 	return normalizeIdentifierForPortalID(id)
 }

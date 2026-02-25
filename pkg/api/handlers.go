@@ -325,6 +325,20 @@ func (s *Server) handleReadReceipt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
 }
 
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "no active session to disconnect", "NOT_CONNECTED")
+		return
+	}
+
+	handle := client.Handle()
+	client.Disconnect()
+
+	s.log.Info().Str("handle", handle).Msg("Client disconnected via API")
+	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
+}
+
 // --- JSON helpers ---
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

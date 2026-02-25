@@ -227,11 +227,12 @@ const openapiSpec = `{
       },
       "WebhookEvent": {
         "type": "object",
-        "description": "Event POSTed to the configured webhook_url",
+        "description": "Event POSTed to the configured webhook_url. The 'category' field groups related event types for easier routing.",
         "properties": {
-          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "connected", "disconnected"] },
+          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "connected", "disconnected"], "description": "Specific event type" },
+          "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction on existing messages), message_receipt (typing/delivered/read_receipt indicators)" },
           "timestamp": { "type": "integer", "description": "Unix timestamp in milliseconds" },
-          "data": { "type": "object", "description": "Event-specific payload (see webhook event types)" }
+          "data": { "type": "object", "description": "Event-specific payload. All message-related events (category != connection) include: participants, group_name, is_group, is_sms. Message events additionally include: uuid, sender, text, subject, reply_to, has_attachment. Update events include: uuid, sender, target_uuid, plus type-specific fields." }
         }
       }
     }
@@ -374,6 +375,17 @@ const openapiSpec = `{
         }
       }
     },
+    "/api/v1/logout": {
+      "post": {
+        "tags": ["Session"],
+        "summary": "Disconnect",
+        "description": "Disconnects the active iMessage session. The bridge stops sending and receiving messages. Use the login flow to reconnect.",
+        "responses": {
+          "200": { "description": "Disconnected", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },
+          "503": { "description": "No active session", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
     "/api/v1/openapi.json": {
       "get": {
         "tags": ["Docs"],
@@ -388,6 +400,7 @@ const openapiSpec = `{
   },
   "tags": [
     { "name": "Login", "description": "Multi-step authentication flow" },
+    { "name": "Session", "description": "Connection management" },
     { "name": "Query", "description": "Connection status and handle lookup" },
     { "name": "Send", "description": "Send messages, media, reactions, and indicators" },
     { "name": "Docs", "description": "API documentation" }
