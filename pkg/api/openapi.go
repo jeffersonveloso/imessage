@@ -74,11 +74,13 @@ const openapiSpec = `{
       },
       "SendMediaRequest": {
         "type": "object",
+        "description": "Send media via JSON. Provide either 'data' (base64) or 'url' (server-side fetch), not both. When using 'url', mime_type and filename are auto-detected if omitted.",
         "properties": {
           "to": { "type": "string", "example": "tel:+15551234567" },
-          "data": { "type": "string", "description": "Base64-encoded file data" },
-          "mime_type": { "type": "string", "example": "image/jpeg" },
-          "filename": { "type": "string", "example": "photo.jpg" },
+          "data": { "type": "string", "description": "Base64-encoded file data (optional if url is set)" },
+          "url": { "type": "string", "format": "uri", "description": "URL to fetch the file from server-side (optional if data is set). Max 100 MB." },
+          "mime_type": { "type": "string", "example": "image/jpeg", "description": "MIME type. Auto-detected from URL response if omitted." },
+          "filename": { "type": "string", "example": "photo.jpg", "description": "Filename. Auto-detected from URL if omitted." },
           "is_sms": { "type": "boolean", "default": false },
           "reply_to": { "type": "string" },
           "reply_part": { "type": "string" },
@@ -86,7 +88,24 @@ const openapiSpec = `{
           "subject": { "type": "string", "description": "Bold subject line displayed above the message body" },
           "caption": { "type": "string", "description": "Text caption sent alongside the attachment" }
         },
-        "required": ["to", "data", "mime_type", "filename"]
+        "required": ["to"]
+      },
+      "SendMediaMultipartRequest": {
+        "type": "object",
+        "description": "Send media via multipart/form-data. The file is uploaded as a binary 'file' field. Max 100 MB.",
+        "properties": {
+          "file": { "type": "string", "format": "binary", "description": "The media file to send" },
+          "to": { "type": "string", "example": "tel:+15551234567" },
+          "mime_type": { "type": "string", "description": "MIME type. Auto-detected from upload if omitted." },
+          "filename": { "type": "string", "description": "Filename. Auto-detected from upload if omitted." },
+          "is_sms": { "type": "string", "enum": ["true", "false"], "default": "false" },
+          "reply_to": { "type": "string" },
+          "reply_part": { "type": "string" },
+          "effect_id": { "type": "string" },
+          "subject": { "type": "string" },
+          "caption": { "type": "string" }
+        },
+        "required": ["file", "to"]
       },
       "ReactRequest": {
         "type": "object",
@@ -291,9 +310,11 @@ const openapiSpec = `{
       "post": {
         "tags": ["Send"],
         "summary": "Send media attachment",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendMediaRequest" } } } },
+        "description": "Send a media file. Supports three modes: (1) JSON with base64 data field, (2) JSON with url field for server-side fetch, (3) multipart/form-data for direct binary upload. Max file size: 100 MB.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendMediaRequest" } }, "multipart/form-data": { "schema": { "$ref": "#/components/schemas/SendMediaMultipartRequest" } } } },
         "responses": {
-          "200": { "description": "Attachment sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendResponse" } } } }
+          "200": { "description": "Attachment sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendResponse" } } } },
+          "415": { "description": "Unsupported content type", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
