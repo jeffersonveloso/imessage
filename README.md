@@ -32,6 +32,25 @@ make install
 
 The installer auto-installs Homebrew and dependencies if needed, asks three questions (homeserver URL, domain, your Matrix ID), generates config files, handles iMessage login, and starts the bridge as a LaunchAgent. It will pause and tell you exactly what to add to your `homeserver.yaml` to register the bridge.
 
+### Standalone HTTP REST API (no Matrix)
+
+Use the bridge as a standalone iMessage API — no Matrix homeserver required:
+
+```bash
+git clone https://github.com/lrhodin/imessage.git
+cd imessage
+make install-api
+```
+
+The installer configures the HTTP API (listen address, API key, webhooks), handles iMessage login via CLI, and starts the service as a LaunchAgent. Once running:
+
+- **Swagger docs**: http://localhost:8080/api/v1/docs
+- **Send messages**: `POST /api/v1/send`
+- **Receive events**: configure a webhook URL during setup
+- **Login via API**: `POST /api/v1/login/start` + `POST /api/v1/login/step`
+
+See [HTTP REST API](#http-rest-api) for full details.
+
 ## Quick Start (Linux)
 
 The bridge runs on Linux using a hardware key extracted once from a real Mac. No Mac needed at runtime for Intel keys; **Apple Silicon Macs** require the NAC relay (a small background process on the Mac).
@@ -119,6 +138,14 @@ make install-beeper
 git clone https://github.com/lrhodin/imessage.git
 cd imessage
 make install
+```
+
+#### Standalone HTTP REST API (no Matrix)
+
+```bash
+git clone https://github.com/lrhodin/imessage.git
+cd imessage
+make install-api
 ```
 
 On first run expect ~3 minutes for the Rust library to compile.
@@ -407,6 +434,11 @@ make clean      # Remove build artifacts
 
 ```
 cmd/mautrix-imessage/        # Entrypoint
+scripts/
+  ├── install.sh             # Install with homeserver (Matrix bridge)
+  ├── install-api.sh         # Install standalone HTTP API (no Matrix)
+  ├── install-beeper.sh      # Install with Beeper cloud
+  └── install-linux.sh       # Linux install variant
 pkg/api/                     # HTTP REST API (independent of Matrix)
   ├── server.go              #   HTTP server, auth middleware, routing
   ├── handlers.go            #   send/query endpoint handlers

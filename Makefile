@@ -23,7 +23,7 @@ ifneq ($(COMMIT),$(PREV_COMMIT))
   $(shell echo $(COMMIT) > $(COMMIT_FILE))
 endif
 
-.PHONY: build clean install install-beeper uninstall reset rust bindings check-deps check-deps-linux
+.PHONY: build clean install install-api install-beeper uninstall reset rust bindings check-deps check-deps-linux
 
 # ===========================================================================
 # Path validation – spaces in the working directory break CGO linker flags
@@ -139,6 +139,14 @@ ifeq ($(UNAME_S),Darwin)
 	@scripts/install.sh "$(BINARY)" "$(DATA_DIR)" "$(BUNDLE_ID)"
 else
 	@scripts/install-linux.sh "$(BINARY)" "$(DATA_DIR)"
+endif
+
+install-api: build
+ifeq ($(UNAME_S),Darwin)
+	@scripts/install-api.sh "$(BINARY)" "$(DATA_DIR)" "$(BUNDLE_ID)"
+else
+	@echo "API-only install on Linux is not yet supported. Run the binary manually:"
+	@echo "  $(BINARY) -c config.yaml"
 endif
 
 install-beeper: build
