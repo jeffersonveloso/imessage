@@ -7,11 +7,14 @@
 #   docker build -t mautrix-imessage .
 #
 # First run (generates default config and exits):
-#   docker run -v /path/to/data:/data mautrix-imessage
-#   # Edit /path/to/data/config.yaml, then run again.
+#   docker run -v ./data:/data mautrix-imessage
+#   # Edit data/config.yaml (see printed instructions), then:
 #
-# Run:
-#   docker run -v /path/to/data:/data -p 8080:8080 mautrix-imessage
+# Run (API-only, no Matrix — default):
+#   docker run -v ./data:/data -p 8080:8080 mautrix-imessage api-only -c /data/config.yaml
+#
+# Run (Matrix bridge mode):
+#   docker run -v ./data:/data mautrix-imessage -c /data/config.yaml
 
 # ── Build stage ───────────────────────────────────────────────────────────────
 # golang:1.25-bookworm provides Go matching the toolchain directive in go.mod.

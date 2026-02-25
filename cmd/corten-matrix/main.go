@@ -80,6 +80,10 @@ func main() {
 			return
 		}
 		switch os.Args[1] {
+		case "api-only":
+			// Start the connector and HTTP API without connecting to Matrix.
+			runAPIOnly(&m)
+			return
 		case "help", "-h", "--help":
 			cli.PrintHelp()
 			return

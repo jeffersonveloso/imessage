@@ -4,7 +4,7 @@ set -euo pipefail
 # If the first argument is a known subcommand, pass everything directly to the binary.
 # This supports: docker run ... mautrix-imessage login -c /data/config.yaml
 case "${1:-}" in
-    login|check-restore|list-handles|carddav-setup)
+    api-only|login|check-restore|list-handles|carddav-setup)
         exec /usr/local/bin/mautrix-imessage-v2 "$@"
         ;;
 esac
@@ -19,27 +19,38 @@ fi
 if [ ! -f "$CONFIG" ]; then
     echo "Config not found at $CONFIG — generating default..."
     /usr/local/bin/mautrix-imessage-v2 -c "$CONFIG" -e 2>/dev/null || true
+
+    API_KEY=$(openssl rand -hex 32 2>/dev/null || echo 'GENERATE_WITH_openssl_rand_-hex_32')
+
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Default config generated at $CONFIG"
     echo ""
-    echo "  Edit the config before starting the bridge. At minimum:"
+    echo "  Edit the config before starting the container."
     echo ""
-    echo "  For API-only mode (no Matrix):"
+    echo "  ── API-only mode (no Matrix) ─────────────────────────"
+    echo "  Set these in config.yaml:"
+    echo ""
+    echo "    database:"
+    echo "      type: sqlite3-fk-wal"
+    echo "      uri: file:/data/mautrix-imessage.db?_txlock=immediate"
+    echo ""
+    echo "    bridge:"
+    echo "      permissions:"
+    echo "        \"@admin:api-only.local\": admin"
+    echo ""
     echo "    network:"
     echo "      api:"
     echo "        enabled: true"
     echo "        listen: \"0.0.0.0:8080\""
-    echo "        api_key: \"$(openssl rand -hex 32 2>/dev/null || echo 'GENERATE_WITH_openssl_rand_-hex_32')\""
+    echo "        api_key: \"$API_KEY\""
     echo ""
-    echo "  For Matrix bridge mode:"
-    echo "    homeserver:"
-    echo "      address: http://your-homeserver:8008"
-    echo "      domain: your-domain.com"
-    echo "    permissions:"
-    echo "      \"@you:your-domain.com\": admin"
+    echo "  Then start with:  docker run ... mautrix-imessage api-only -c /data/config.yaml"
     echo ""
-    echo "  Then restart the container."
+    echo "  ── Matrix bridge mode ────────────────────────────────"
+    echo "  Configure homeserver.address, homeserver.domain,"
+    echo "  and bridge.permissions, then start normally."
+    echo ""
     echo "═══════════════════════════════════════════════════════════"
     exit 0
 fi
