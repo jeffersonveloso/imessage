@@ -68,6 +68,9 @@ func New(cfg Config, provider IMClientProvider, loginProvider LoginProvider, log
 	mux.HandleFunc("POST /api/v1/login/start", s.handleLoginStart)
 	mux.HandleFunc("POST /api/v1/login/step", s.handleLoginStep)
 
+	// Session
+	mux.HandleFunc("POST /api/v1/logout", s.handleLogout)
+
 	// Top-level mux: docs served without auth, everything else requires auth.
 	root := http.NewServeMux()
 	root.HandleFunc("GET /api/v1/openapi.json", handleOpenAPISpec)

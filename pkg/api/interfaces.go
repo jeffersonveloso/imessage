@@ -55,6 +55,7 @@ type IMClient interface {
 	Handle() string
 	AllHandles() []string
 	IsLoggedIn() bool
+	Disconnect()
 	NormalizeIdentifier(identifier string) string
 	MimeToUTI(mime string) string
 
