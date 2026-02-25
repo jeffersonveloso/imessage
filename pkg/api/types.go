@@ -14,9 +14,10 @@ type SendRequest struct {
 
 type SendMediaRequest struct {
 	To        string  `json:"to"`
-	Data      string  `json:"data"` // base64-encoded
-	MimeType  string  `json:"mime_type"`
-	Filename  string  `json:"filename"`
+	Data      string  `json:"data,omitempty"`      // base64-encoded (optional if url is set)
+	URL       string  `json:"url,omitempty"`        // fetch file from this URL
+	MimeType  string  `json:"mime_type,omitempty"`  // auto-detected from URL if omitted
+	Filename  string  `json:"filename,omitempty"`   // auto-detected from URL if omitted
 	IsSMS     bool    `json:"is_sms,omitempty"`
 	ReplyTo   *string `json:"reply_to,omitempty"`
 	ReplyPart *string `json:"reply_part,omitempty"`

@@ -1,13 +1,22 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
+	"time"
 
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
+
+const maxMediaSize = 100 << 20 // 100 MB
 
 // buildConversation normalizes the recipient and builds a WrappedConversation for DMs.
 func (s *Server) buildConversation(client IMClient, to string, isSMS bool) rustpushgo.WrappedConversation {
@@ -134,18 +143,61 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
-	var req SendMediaRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if req.To == "" || req.Data == "" || req.MimeType == "" || req.Filename == "" {
-		writeError(w, http.StatusBadRequest, "to, data, mime_type, and filename are required", "INVALID_REQUEST")
+	var (
+		req  SendMediaRequest
+		data []byte
+		err  error
+	)
+
+	ct := r.Header.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(ct, "multipart/form-data"):
+		data, req, err = parseMultipartMedia(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+			return
+		}
+
+	case ct == "application/json":
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+
+		switch {
+		case req.Data != "" && req.URL != "":
+			writeError(w, http.StatusBadRequest, "provide either data or url, not both", "INVALID_REQUEST")
+			return
+		case req.URL != "":
+			var fetchedMime, fetchedFilename string
+			data, fetchedMime, fetchedFilename, err = fetchMediaFromURL(r.Context(), req.URL)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("failed to fetch URL: %v", err), "INVALID_REQUEST")
+				return
+			}
+			if req.MimeType == "" {
+				req.MimeType = fetchedMime
+			}
+			if req.Filename == "" {
+				req.Filename = fetchedFilename
+			}
+		case req.Data != "":
+			data, err = base64.StdEncoding.DecodeString(req.Data)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "data must be valid base64", "INVALID_REQUEST")
+				return
+			}
+		default:
+			writeError(w, http.StatusBadRequest, "either data or url is required", "INVALID_REQUEST")
+			return
+		}
+
+	default:
+		writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json or multipart/form-data", "INVALID_REQUEST")
 		return
 	}
 
-	data, err := base64.StdEncoding.DecodeString(req.Data)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "data must be valid base64", "INVALID_REQUEST")
+	if req.To == "" || req.MimeType == "" || req.Filename == "" {
+		writeError(w, http.StatusBadRequest, "to, mime_type, and filename are required", "INVALID_REQUEST")
 		return
 	}
 
@@ -166,6 +218,125 @@ func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info().Str("uuid", uuid).Str("to", req.To).Str("filename", req.Filename).Msg("Attachment sent via API")
 	writeJSON(w, http.StatusOK, SendResponse{UUID: uuid, Status: "sent"})
+}
+
+// parseMultipartMedia extracts file data and metadata from a multipart/form-data request.
+func parseMultipartMedia(r *http.Request) ([]byte, SendMediaRequest, error) {
+	if err := r.ParseMultipartForm(maxMediaSize); err != nil {
+		return nil, SendMediaRequest{}, fmt.Errorf("failed to parse multipart form: %v", err)
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return nil, SendMediaRequest{}, fmt.Errorf("file field is required: %v", err)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxMediaSize+1))
+	if err != nil {
+		return nil, SendMediaRequest{}, fmt.Errorf("failed to read file: %v", err)
+	}
+	if int64(len(data)) > maxMediaSize {
+		return nil, SendMediaRequest{}, fmt.Errorf("file exceeds maximum size of 100 MB")
+	}
+
+	req := SendMediaRequest{
+		To:       r.FormValue("to"),
+		MimeType: r.FormValue("mime_type"),
+		Filename: r.FormValue("filename"),
+		IsSMS:    r.FormValue("is_sms") == "true",
+	}
+
+	// Auto-detect mime type from the file header if not provided
+	if req.MimeType == "" {
+		req.MimeType = header.Header.Get("Content-Type")
+	}
+	if req.MimeType == "" {
+		req.MimeType = http.DetectContentType(data)
+	}
+
+	// Auto-detect filename from the upload header if not provided
+	if req.Filename == "" {
+		req.Filename = header.Filename
+	}
+
+	// Optional pointer fields from form values
+	if v := r.FormValue("reply_to"); v != "" {
+		req.ReplyTo = &v
+	}
+	if v := r.FormValue("reply_part"); v != "" {
+		req.ReplyPart = &v
+	}
+	if v := r.FormValue("effect_id"); v != "" {
+		req.EffectID = &v
+	}
+	if v := r.FormValue("subject"); v != "" {
+		req.Subject = &v
+	}
+	if v := r.FormValue("caption"); v != "" {
+		req.Caption = &v
+	}
+
+	return data, req, nil
+}
+
+// fetchMediaFromURL downloads a file from the given URL and returns its data, mime type, and filename.
+func fetchMediaFromURL(ctx context.Context, rawURL string) ([]byte, string, string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("invalid URL: %v", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, "", "", fmt.Errorf("URL scheme must be http or https")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", "", fmt.Errorf("URL returned status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMediaSize+1))
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to read response: %v", err)
+	}
+	if int64(len(data)) > maxMediaSize {
+		return nil, "", "", fmt.Errorf("file exceeds maximum size of 100 MB")
+	}
+
+	// Detect mime type from Content-Type header
+	mimeType := ""
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		mimeType, _, _ = mime.ParseMediaType(ct)
+	}
+	if mimeType == "" {
+		mimeType = http.DetectContentType(data)
+	}
+
+	// Detect filename from Content-Disposition header or URL path
+	filename := ""
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		_, params, _ := mime.ParseMediaType(cd)
+		filename = params["filename"]
+	}
+	if filename == "" {
+		filename = path.Base(parsed.Path)
+		if filename == "." || filename == "/" {
+			filename = "download"
+		}
+	}
+
+	return data, mimeType, filename, nil
 }
 
 func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) {
