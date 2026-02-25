@@ -6,11 +6,12 @@
 # Build:
 #   docker build -t mautrix-imessage .
 #
-# Run (API-only, no Matrix):
+# First run (generates default config and exits):
 #   docker run -v /path/to/data:/data mautrix-imessage
+#   # Edit /path/to/data/config.yaml, then run again.
 #
-# Run (with Matrix homeserver):
-#   docker run -v /path/to/data:/data mautrix-imessage
+# Run:
+#   docker run -v /path/to/data:/data -p 8080:8080 mautrix-imessage
 
 # ── Build stage ───────────────────────────────────────────────────────────────
 # golang:1.25-bookworm provides Go matching the toolchain directive in go.mod.
@@ -108,6 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/mautrix-imessage-v2 /usr/local/bin/mautrix-imessage-v2
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Expose default API port (configure via network.api.listen in config.yaml)
 EXPOSE 8080
@@ -115,5 +117,8 @@ EXPOSE 8080
 VOLUME /data
 WORKDIR /data
 
-ENTRYPOINT ["/usr/local/bin/mautrix-imessage-v2"]
+# The entrypoint script auto-generates a default config on first run
+# if /data/config.yaml doesn't exist, then prints setup instructions and exits.
+# On subsequent runs (config exists), it starts the bridge normally.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["-c", "/data/config.yaml"]
