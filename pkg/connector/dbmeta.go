@@ -14,8 +14,8 @@ import (
 type PortalMetadata struct {
 	ThreadID   string `json:"thread_id,omitempty"`
 	SenderGuid string `json:"sender_guid,omitempty"` // Persistent iMessage group UUID
-	GroupName  string `json:"group_name,omitempty"`   // iMessage cv_name for outbound routing
-	IsSms      bool   `json:"is_sms,omitempty"`       // True if this portal routes through SMS
+	GroupName  string `json:"group_name,omitempty"`  // iMessage cv_name for outbound routing
+	IsSms      bool   `json:"is_sms,omitempty"`      // True if this portal routes through SMS
 }
 
 type GhostMetadata struct{}
@@ -74,6 +74,8 @@ type UserLoginMetadata struct {
 	// that are still valid are reused; the legacy fields above stay as the
 	// fallback for sessions that predate it.
 	AccountPersistBlob string `json:"account_persist_blob,omitempty"`
+	// Caller-provided instance ID echoed in every webhook event.
+	InstanceID string `json:"instance_id,omitempty"`
 }
 
 func (c *IMConnector) GetDBMetaTypes() database.MetaTypes {

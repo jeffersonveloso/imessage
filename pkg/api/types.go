@@ -15,9 +15,9 @@ type SendRequest struct {
 type SendMediaRequest struct {
 	To        string  `json:"to"`
 	Data      string  `json:"data,omitempty"`      // base64-encoded (optional if url is set)
-	URL       string  `json:"url,omitempty"`        // fetch file from this URL
-	MimeType  string  `json:"mime_type,omitempty"`  // auto-detected from URL if omitted
-	Filename  string  `json:"filename,omitempty"`   // auto-detected from URL if omitted
+	URL       string  `json:"url,omitempty"`       // fetch file from this URL
+	MimeType  string  `json:"mime_type,omitempty"` // auto-detected from URL if omitted
+	Filename  string  `json:"filename,omitempty"`  // auto-detected from URL if omitted
 	IsSMS     bool    `json:"is_sms,omitempty"`
 	ReplyTo   *string `json:"reply_to,omitempty"`
 	ReplyPart *string `json:"reply_part,omitempty"`
@@ -99,7 +99,8 @@ type ErrorResponse struct {
 // --- Login request/response types ---
 
 type LoginStartRequest struct {
-	Flow string `json:"flow"`
+	Flow       string `json:"flow"`
+	InstanceID string `json:"instance_id,omitempty"`
 }
 
 type LoginStepRequest struct {
@@ -129,10 +130,11 @@ type LoginStepResponse struct {
 //   message_receipt — typing, read_receipt, delivered (delivery/read indicators)
 
 type WebhookEvent struct {
-	Type      string `json:"type"`     // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
-	Category  string `json:"category"` // connection, message, message_update, message_receipt
-	Timestamp uint64 `json:"timestamp"`
-	Data      any    `json:"data"`
+	Type       string `json:"type"`     // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
+	Category   string `json:"category"` // connection, message, message_update, message_receipt
+	Timestamp  uint64 `json:"timestamp"`
+	InstanceID string `json:"instance_id,omitempty"`
+	Data       any    `json:"data"`
 }
 
 // --- Webhook categories ---

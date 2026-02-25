@@ -58,6 +58,9 @@ type PersistedSessionState struct {
 	// Opaque IDS delivery-key cache (base64). Bookkeeping that rides alongside
 	// the registration data and is preserved across saves (see saveSessionState).
 	IDSKeyCache string `json:"ids_key_cache,omitempty"`
+
+	// Caller-provided instance ID echoed in every webhook event.
+	InstanceID string `json:"instance_id,omitempty"`
 }
 
 // sessionFilePath returns the path to the persisted session state file:

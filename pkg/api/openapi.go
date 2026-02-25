@@ -206,7 +206,8 @@ const openapiSpec = `{
       "LoginStartRequest": {
         "type": "object",
         "properties": {
-          "flow": { "type": "string", "description": "Login flow ID from /login/flows", "example": "external-key" }
+          "flow": { "type": "string", "description": "Login flow ID from /login/flows", "example": "external-key" },
+          "instance_id": { "type": "string", "description": "Optional caller-provided instance ID echoed in every webhook event" }
         },
         "required": ["flow"]
       },
@@ -256,6 +257,7 @@ const openapiSpec = `{
           "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "connected", "disconnected"], "description": "Specific event type" },
           "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction on existing messages), message_receipt (typing/delivered/read_receipt indicators)" },
           "timestamp": { "type": "integer", "description": "Unix timestamp in milliseconds" },
+          "instance_id": { "type": "string", "description": "Caller-provided instance ID echoed in every webhook event" },
           "data": { "type": "object", "description": "Event-specific payload. All message-related events (category != connection) include: participants, group_name, is_group, is_sms. Message events additionally include: uuid, sender, text, subject, reply_to, has_attachment. Update events include: uuid, sender, target_uuid, plus type-specific fields." }
         }
       }
