@@ -664,6 +664,7 @@ func (c *IMClient) Connect(ctx context.Context) {
 	if srv := c.Main.apiServer; srv != nil && srv.Webhook() != nil {
 		srv.Webhook().Dispatch(api.WebhookEvent{
 			Type:      "connected",
+			Category:  api.WebhookCategoryConnection,
 			Timestamp: uint64(time.Now().UnixMilli()),
 			Data: api.WebhookConnectionData{
 				Handle:     c.handle,
@@ -726,6 +727,7 @@ func (c *IMClient) Disconnect() {
 	if srv := c.Main.apiServer; srv != nil && srv.Webhook() != nil {
 		srv.Webhook().Dispatch(api.WebhookEvent{
 			Type:      "disconnected",
+			Category:  api.WebhookCategoryConnection,
 			Timestamp: uint64(time.Now().UnixMilli()),
 			Data: api.WebhookConnectionData{
 				Handle:     c.handle,
@@ -880,55 +882,84 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 	}
 
 	var eventType string
+	var category string
 	var data any
 
 	sender := ptrStringOr(msg.Sender, "")
+	isGroup := len(msg.Participants) > 2
 
 	switch {
 	case msg.IsDelivered:
 		eventType = "delivered"
+		category = api.WebhookCategoryMessageReceipt
 		data = api.WebhookDeliveredData{
 			Sender:       sender,
 			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsReadReceipt:
 		eventType = "read_receipt"
+		category = api.WebhookCategoryMessageReceipt
 		data = api.WebhookReadReceiptData{
 			Sender:       sender,
 			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsTyping:
 		eventType = "typing"
+		category = api.WebhookCategoryMessageReceipt
 		data = api.WebhookTypingData{
 			Sender:       sender,
 			Typing:       true,
 			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsUnsend:
 		eventType = "unsend"
+		category = api.WebhookCategoryMessageUpdate
 		data = api.WebhookUnsendData{
-			UUID:       msg.Uuid,
-			Sender:     sender,
-			TargetUUID: ptrStringOr(msg.UnsendTargetUuid, ""),
+			UUID:         msg.Uuid,
+			Sender:       sender,
+			TargetUUID:   ptrStringOr(msg.UnsendTargetUuid, ""),
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsTapback:
 		eventType = "reaction"
+		category = api.WebhookCategoryMessageUpdate
 		data = api.WebhookReactionData{
-			UUID:       msg.Uuid,
-			Sender:     sender,
-			TargetUUID: ptrStringOr(msg.TapbackTargetUuid, ""),
-			TargetPart: msg.TapbackTargetPart,
-			Reaction:   msg.TapbackType,
-			Emoji:      msg.TapbackEmoji,
-			Remove:     msg.TapbackRemove,
+			UUID:         msg.Uuid,
+			Sender:       sender,
+			TargetUUID:   ptrStringOr(msg.TapbackTargetUuid, ""),
+			TargetPart:   msg.TapbackTargetPart,
+			Reaction:     msg.TapbackType,
+			Emoji:        msg.TapbackEmoji,
+			Remove:       msg.TapbackRemove,
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsEdit:
 		eventType = "edit"
+		category = api.WebhookCategoryMessageUpdate
 		data = api.WebhookEditData{
-			UUID:       msg.Uuid,
-			Sender:     sender,
-			TargetUUID: ptrStringOr(msg.EditTargetUuid, ""),
-			NewText:    msg.EditNewText,
+			UUID:         msg.Uuid,
+			Sender:       sender,
+			TargetUUID:   ptrStringOr(msg.EditTargetUuid, ""),
+			NewText:      msg.EditNewText,
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
 		}
 	case msg.IsError, msg.IsPeerCacheInvalidate, msg.IsMoveToRecycleBin,
 		msg.IsPermanentDelete, msg.IsRename, msg.IsParticipantChange, msg.IsIconChange:
@@ -937,6 +968,7 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 	default:
 		// Regular message
 		eventType = "message"
+		category = api.WebhookCategoryMessage
 		data = api.WebhookMessageData{
 			UUID:          msg.Uuid,
 			Sender:        sender,
@@ -944,6 +976,7 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 			Subject:       msg.Subject,
 			Participants:  msg.Participants,
 			GroupName:     msg.GroupName,
+			IsGroup:       isGroup,
 			IsSMS:         msg.IsSms,
 			ReplyTo:       msg.ReplyGuid,
 			HasAttachment: len(msg.Attachments) > 0,
@@ -952,6 +985,7 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 
 	srv.Webhook().Dispatch(api.WebhookEvent{
 		Type:      eventType,
+		Category:  category,
 		Timestamp: msg.TimestampMs,
 		Data:      data,
 	})

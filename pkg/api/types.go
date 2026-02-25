@@ -114,12 +114,29 @@ type LoginStepResponse struct {
 }
 
 // --- Webhook event types ---
+//
+// Every webhook event has a category that groups related event types:
+//
+//   connection      — connected, disconnected
+//   message         — message (new incoming message)
+//   message_update  — edit, unsend, reaction (modifications to existing messages)
+//   message_receipt — typing, read_receipt, delivered (delivery/read indicators)
 
 type WebhookEvent struct {
-	Type      string `json:"type"` // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
+	Type      string `json:"type"`      // message, reaction, typing, read_receipt, delivered, edit, unsend, connected, disconnected
+	Category  string `json:"category"`  // connection, message, message_update, message_receipt
 	Timestamp uint64 `json:"timestamp"`
 	Data      any    `json:"data"`
 }
+
+// --- Webhook categories ---
+
+const (
+	WebhookCategoryConnection     = "connection"
+	WebhookCategoryMessage        = "message"
+	WebhookCategoryMessageUpdate  = "message_update"
+	WebhookCategoryMessageReceipt = "message_receipt"
+)
 
 type WebhookMessageData struct {
 	UUID          string   `json:"uuid"`
@@ -128,48 +145,70 @@ type WebhookMessageData struct {
 	Subject       *string  `json:"subject,omitempty"`
 	Participants  []string `json:"participants"`
 	GroupName     *string  `json:"group_name,omitempty"`
+	IsGroup       bool     `json:"is_group"`
 	IsSMS         bool     `json:"is_sms"`
 	ReplyTo       *string  `json:"reply_to,omitempty"`
 	HasAttachment bool     `json:"has_attachment"`
 }
 
 type WebhookReactionData struct {
-	UUID       string  `json:"uuid"`
-	Sender     string  `json:"sender"`
-	TargetUUID string  `json:"target_uuid"`
-	TargetPart *uint64 `json:"target_part,omitempty"`
-	Reaction   *uint32 `json:"reaction,omitempty"`
-	Emoji      *string `json:"emoji,omitempty"`
-	Remove     bool    `json:"remove"`
+	UUID         string   `json:"uuid"`
+	Sender       string   `json:"sender"`
+	TargetUUID   string   `json:"target_uuid"`
+	TargetPart   *uint64  `json:"target_part,omitempty"`
+	Reaction     *uint32  `json:"reaction,omitempty"`
+	Emoji        *string  `json:"emoji,omitempty"`
+	Remove       bool     `json:"remove"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookTypingData struct {
 	Sender       string   `json:"sender"`
 	Typing       bool     `json:"typing"`
-	Participants []string `json:"participants,omitempty"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookReadReceiptData struct {
 	Sender       string   `json:"sender"`
-	Participants []string `json:"participants,omitempty"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookDeliveredData struct {
 	Sender       string   `json:"sender"`
-	Participants []string `json:"participants,omitempty"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookEditData struct {
-	UUID       string  `json:"uuid"`
-	Sender     string  `json:"sender"`
-	TargetUUID string  `json:"target_uuid"`
-	NewText    *string `json:"new_text,omitempty"`
+	UUID         string   `json:"uuid"`
+	Sender       string   `json:"sender"`
+	TargetUUID   string   `json:"target_uuid"`
+	NewText      *string  `json:"new_text,omitempty"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookUnsendData struct {
-	UUID       string `json:"uuid"`
-	Sender     string `json:"sender"`
-	TargetUUID string `json:"target_uuid"`
+	UUID         string   `json:"uuid"`
+	Sender       string   `json:"sender"`
+	TargetUUID   string   `json:"target_uuid"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
 }
 
 type WebhookConnectionData struct {
