@@ -15,42 +15,46 @@ if [ "${1:-}" = "-c" ] && [ -n "${2:-}" ]; then
     CONFIG="$2"
 fi
 
-# Generate default config if it doesn't exist
+# Generate default config if it doesn't exist.
+# Auto-patches the generated config for API-only Docker usage so
+# the container is ready to start without manual editing.
 if [ ! -f "$CONFIG" ]; then
     echo "Config not found at $CONFIG — generating default..."
     /usr/local/bin/mautrix-imessage-v2 -c "$CONFIG" -e 2>/dev/null || true
 
-    API_KEY=$(openssl rand -hex 32 2>/dev/null || echo 'GENERATE_WITH_openssl_rand_-hex_32')
+    API_KEY=$(openssl rand -hex 32 2>/dev/null || echo 'REPLACE_ME')
+    WEBHOOK_SECRET=$(openssl rand -hex 32 2>/dev/null || echo '')
+
+    # Patch the generated config for API-only Docker usage:
+    #   - SQLite database at /data/
+    #   - Admin permission for the login adapter
+    #   - HTTP API enabled with generated keys
+    sed -i \
+        -e 's|type: postgres|type: sqlite3-fk-wal|' \
+        -e 's|uri: postgres://user:password@host/database?sslmode=disable|uri: file:/data/mautrix-imessage.db?_txlock=immediate|' \
+        -e 's|"@admin:example.com": admin|"@admin:api-only.local": admin|' \
+        -e 's|enabled: false|enabled: true|' \
+        -e "s|api_key: \"\"|api_key: \"$API_KEY\"|" \
+        -e "s|webhook_secret: \"\"|webhook_secret: \"$WEBHOOK_SECRET\"|" \
+        "$CONFIG"
 
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  Default config generated at $CONFIG"
+    echo "  Config generated at $CONFIG (pre-configured for API-only)"
     echo ""
-    echo "  Edit the config before starting the container."
+    echo "  API key: $API_KEY"
     echo ""
-    echo "  ── API-only mode (no Matrix) ─────────────────────────"
-    echo "  Set these in config.yaml:"
+    echo "  The config is ready to use. Just restart the container:"
+    echo "    docker start <container>"
     echo ""
-    echo "    database:"
-    echo "      type: sqlite3-fk-wal"
-    echo "      uri: file:/data/mautrix-imessage.db?_txlock=immediate"
+    echo "  Optional: edit $CONFIG to set:"
+    echo "    - network.api.webhook_url    (receive incoming events)"
+    echo "    - network.api.api_key        (change the generated key)"
+    echo "    - network.api.listen         (default: 0.0.0.0:8080)"
     echo ""
-    echo "    bridge:"
-    echo "      permissions:"
-    echo "        \"@admin:api-only.local\": admin"
-    echo ""
-    echo "    network:"
-    echo "      api:"
-    echo "        enabled: true"
-    echo "        listen: \"0.0.0.0:8080\""
-    echo "        api_key: \"$API_KEY\""
-    echo ""
-    echo "  Then restart the container."
-    echo ""
-    echo "  ── Matrix bridge mode ────────────────────────────────"
-    echo "  Configure homeserver.address, homeserver.domain,"
-    echo "  and bridge.permissions, then restart the container."
-    echo ""
+    echo "  Docs:  http://localhost:8080/api/v1/docs"
+    echo "  Test:  curl -H 'Authorization: Bearer $API_KEY' \\"
+    echo "           http://localhost:8080/api/v1/status"
     echo "═══════════════════════════════════════════════════════════"
     exit 0
 fi
