@@ -1,0 +1,32 @@
+# Rust/Go build artifacts
+**/target/
+*.a
+mautrix-imessage-v2
+mautrix-imessage-v2.app/
+extract-key
+.build-commit
+
+# Runtime data (not needed at build time)
+data/
+state/
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.session
+
+# User config files at the root (the embedded example-config.yaml must NOT be excluded)
+config.yaml
+registration.yaml
+
+# Git and CI
+.git
+.github
+
+# macOS / IDE
+.DS_Store
+.idea
+prompts/
+_todo/
+docs/
+tools/apl/

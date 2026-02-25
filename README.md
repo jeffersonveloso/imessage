@@ -51,6 +51,25 @@ macOS 13+ required (Ventura or later). Sign into iCloud on the Mac running the b
 
 `setup` also offers to symlink `corten-matrix` into `/usr/local/bin` so it's on your `PATH`; after that you can drop the `./` and run `corten-matrix <command>` from anywhere.
 
+### Standalone HTTP REST API (no Matrix)
+
+Use the bridge as a standalone iMessage API — no Matrix homeserver required:
+
+```bash
+git clone https://github.com/lrhodin/imessage.git
+cd imessage
+make install-api
+```
+
+The installer configures the HTTP API (listen address, API key, webhooks), handles iMessage login via CLI, and starts the service as a LaunchAgent. Once running:
+
+- **Swagger docs**: http://localhost:8080/api/v1/docs
+- **Send messages**: `POST /api/v1/send`
+- **Receive events**: configure a webhook URL during setup
+- **Login via API**: `POST /api/v1/login/start` + `POST /api/v1/login/step`
+
+See [HTTP REST API](#http-rest-api) for full details.
+
 ## Quick Start (Linux)
 
 The bridge runs on Linux using a hardware key extracted once from a real Mac. **No Mac is needed at runtime** — a Mac (Intel or Apple Silicon, same tool either way) is used only for the one-time key extraction in Step 1, after which it can go back to normal use.
