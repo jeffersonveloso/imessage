@@ -14,7 +14,9 @@
 
 # ── Build stage ───────────────────────────────────────────────────────────────
 # golang:1.25-bookworm provides Go matching the toolchain directive in go.mod.
-FROM --platform=linux/amd64 golang:1.25-bookworm AS builder
+# TARGETPLATFORM defaults to linux/amd64 — open-absinthe requires x86_64.
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=$TARGETPLATFORM golang:1.25-bookworm AS builder
 
 # System build dependencies (see scripts/bootstrap-linux.sh for rationale).
 # libunicorn-dev: avoids building Unicorn Engine / QEMU from source via cmake.
@@ -83,7 +85,7 @@ RUN BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
          ./cmd/mautrix-imessage/
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM --platform=linux/amd64 ubuntu:24.04
+FROM --platform=$TARGETPLATFORM ubuntu:24.04
 
 # Runtime shared-library dependencies:
 #   libolm3      — Matrix end-to-bridge encryption (Olm/Megolm via mautrix)
