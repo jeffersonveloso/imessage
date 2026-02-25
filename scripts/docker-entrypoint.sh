@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # If the first argument is a known subcommand, pass everything directly to the binary.
-# This supports: docker run ... mautrix-imessage login -c /data/config.yaml
+# This supports: docker run ... mautrix-imessage api-only -c /data/config.yaml
 case "${1:-}" in
     api-only|login|check-restore|list-handles|carddav-setup)
         exec /usr/local/bin/mautrix-imessage-v2 "$@"
         ;;
 esac
 
-# Default: normal bridge startup with -c <config>
+# Default: bridge startup with -c <config>
 CONFIG="/data/config.yaml"
 if [ "${1:-}" = "-c" ] && [ -n "${2:-}" ]; then
     CONFIG="$2"
@@ -45,14 +45,23 @@ if [ ! -f "$CONFIG" ]; then
     echo "        listen: \"0.0.0.0:8080\""
     echo "        api_key: \"$API_KEY\""
     echo ""
-    echo "  Then start with:  docker run ... mautrix-imessage api-only -c /data/config.yaml"
+    echo "  Then restart the container."
     echo ""
     echo "  ── Matrix bridge mode ────────────────────────────────"
     echo "  Configure homeserver.address, homeserver.domain,"
-    echo "  and bridge.permissions, then start normally."
+    echo "  and bridge.permissions, then restart the container."
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     exit 0
+fi
+
+# Auto-detect mode from config.
+# The default/unconfigured homeserver address is "http://example.localhost:8008".
+# If it hasn't been changed, the user hasn't set up Matrix, so we start in
+# api-only mode (which only requires api.enabled + permissions + database).
+if grep -q 'address: http://example\.localhost' "$CONFIG" 2>/dev/null; then
+    echo "Homeserver not configured — starting in API-only mode"
+    exec /usr/local/bin/mautrix-imessage-v2 api-only "$@"
 fi
 
 exec /usr/local/bin/mautrix-imessage-v2 "$@"
