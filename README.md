@@ -263,15 +263,21 @@ systemctl --user restart mautrix-imessage
 # Build the image
 docker build -t mautrix-imessage .
 
-# First run — generates default config and exits
-docker run -v ./data:/data mautrix-imessage
-# Edit data/config.yaml (see instructions printed by the container)
+# 1. Generate default config (first run — prints instructions and exits)
+docker run --rm -v ./data:/data mautrix-imessage
 
-# Start the bridge
+# 2. Edit data/config.yaml (see printed instructions for required fields)
+
+# 3a. Start in API-only mode (no Matrix homeserver needed)
 docker run -d --name mautrix-imessage \
   -v ./data:/data \
   -p 8080:8080 \
-  mautrix-imessage
+  mautrix-imessage api-only -c /data/config.yaml
+
+# 3b. Or start in Matrix bridge mode (requires homeserver config)
+docker run -d --name mautrix-imessage \
+  -v ./data:/data \
+  mautrix-imessage -c /data/config.yaml
 
 # View logs
 docker logs -f mautrix-imessage

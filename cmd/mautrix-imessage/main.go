@@ -56,6 +56,10 @@ func main() {
 	// Handle subcommands / flags before normal bridge startup.
 	if len(os.Args) > 1 && os.Args[0] != "-" {
 		switch os.Args[1] {
+		case "api-only":
+			// Start in API-only mode — no Matrix homeserver required.
+			runAPIOnly(&m)
+			return
 		case "login":
 			// Remove "login" from args so flag parsing in PreInit works.
 			os.Args = append(os.Args[:1], os.Args[2:]...)
