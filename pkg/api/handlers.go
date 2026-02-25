@@ -122,7 +122,7 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conv := s.buildConversation(client, req.To, req.IsSMS)
-	uuid, err := client.SendMessage(conv, req.Text, client.Handle(), req.ReplyTo, req.ReplyPart)
+	uuid, err := client.SendMessage(conv, req.Text, client.Handle(), req.ReplyTo, req.ReplyPart, req.EffectID, req.Subject)
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Msg("Failed to send message")
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to send: %v", err), "SEND_FAILED")
@@ -157,7 +157,7 @@ func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 
 	conv := s.buildConversation(client, req.To, req.IsSMS)
 	uti := client.MimeToUTI(req.MimeType)
-	uuid, err := client.SendAttachment(conv, data, req.MimeType, uti, req.Filename, client.Handle(), req.ReplyTo, req.ReplyPart)
+	uuid, err := client.SendAttachment(conv, data, req.MimeType, uti, req.Filename, client.Handle(), req.ReplyTo, req.ReplyPart, req.EffectID, req.Subject)
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Str("filename", req.Filename).Msg("Failed to send attachment")
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to send attachment: %v", err), "SEND_FAILED")

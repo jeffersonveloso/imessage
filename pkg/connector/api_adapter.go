@@ -22,12 +22,12 @@ func (a *imClientAdapter) NormalizeIdentifier(id string) string {
 }
 func (a *imClientAdapter) MimeToUTI(mime string) string { return mimeToUTI(mime) }
 
-func (a *imClientAdapter) SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart *string) (string, error) {
-	return a.client.client.SendMessage(conv, text, handle, replyGuid, replyPart)
+func (a *imClientAdapter) SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart, effect, subject *string) (string, error) {
+	return a.client.client.SendMessage(conv, text, handle, replyGuid, replyPart, effect, subject)
 }
 
-func (a *imClientAdapter) SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart *string) (string, error) {
-	return a.client.client.SendAttachment(conv, data, mime, uti, filename, handle, replyGuid, replyPart)
+func (a *imClientAdapter) SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart, effect, subject *string) (string, error) {
+	return a.client.client.SendAttachment(conv, data, mime, uti, filename, handle, replyGuid, replyPart, effect, subject)
 }
 
 func (a *imClientAdapter) SendTapback(conv rustpushgo.WrappedConversation, targetUuid string, targetPart uint64, reaction uint32, emoji *string, remove bool, handle string) (string, error) {

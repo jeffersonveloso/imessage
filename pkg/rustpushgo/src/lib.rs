@@ -2430,6 +2430,8 @@ impl Client {
         handle: String,
         reply_guid: Option<String>,
         reply_part: Option<String>,
+        effect: Option<String>,
+        subject: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         let service = if conversation.is_sms {
@@ -2499,6 +2501,8 @@ impl Client {
         normal.link_meta = link_meta;
         normal.reply_guid = reply_guid.clone();
         normal.reply_part = reply_part.clone();
+        normal.effect = effect.clone();
+        normal.subject = subject.clone();
         let mut msg = MessageInst::new(
             conv.clone(),
             &handle,
@@ -2753,6 +2757,8 @@ impl Client {
         handle: String,
         reply_guid: Option<String>,
         reply_part: Option<String>,
+        effect: Option<String>,
+        subject: Option<String>,
     ) -> Result<String, WrappedError> {
         let conv: ConversationData = (&conversation).into();
         // Detect voice messages by UTI (CAF files from OGG→CAF remux are voice recordings)
@@ -2794,11 +2800,11 @@ impl Client {
             &handle,
             Message::Message(NormalMessage {
                 parts: MessageParts(parts),
-                effect: None,
+                effect: effect.clone(),
                 reply_guid: reply_guid.clone(),
                 reply_part: reply_part.clone(),
                 service,
-                subject: None,
+                subject: subject.clone(),
                 app: None,
                 link_meta: None,
                 voice: is_voice,
@@ -2825,11 +2831,11 @@ impl Client {
                     &handle,
                     Message::Message(NormalMessage {
                         parts: MessageParts(sms_parts),
-                        effect: None,
+                        effect: effect,
                         reply_guid: reply_guid,
                         reply_part: reply_part,
                         service: sms_service,
-                        subject: None,
+                        subject: subject,
                         app: None,
                         link_meta: None,
                         voice: is_voice,
