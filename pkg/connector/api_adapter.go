@@ -242,3 +242,36 @@ func (a *imClientAdapter) DeleteChat(participants []string, groupName *string) e
 	ctx := context.Background()
 	return a.client.cloudStore.deleteLocalChatByPortalID(ctx, portalID)
 }
+
+func (a *imClientAdapter) ClearInstanceID() error {
+	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
+	if !ok {
+		return fmt.Errorf("unexpected metadata type")
+	}
+	if meta.InstanceID == "" {
+		return nil
+	}
+	meta.InstanceID = ""
+	if err := a.client.UserLogin.Save(context.Background()); err != nil {
+		return fmt.Errorf("failed to persist metadata: %w", err)
+	}
+	// Also update the backup session file.
+	saveSessionState(a.client.UserLogin.Log.With().Str("action", "clear_instance_id").Logger(), PersistedSessionState{
+		IDSIdentity:              meta.IDSIdentity,
+		APSState:                 meta.APSState,
+		IDSUsers:                 meta.IDSUsers,
+		PreferredHandle:          meta.PreferredHandle,
+		Platform:                 meta.Platform,
+		HardwareKey:              meta.HardwareKey,
+		DeviceID:                 meta.DeviceID,
+		AccountUsername:          meta.AccountUsername,
+		AccountHashedPasswordHex: meta.AccountHashedPasswordHex,
+		AccountPET:               meta.AccountPET,
+		AccountADSID:             meta.AccountADSID,
+		AccountDSID:              meta.AccountDSID,
+		AccountSPDBase64:         meta.AccountSPDBase64,
+		MmeDelegateJSON:          meta.MmeDelegateJSON,
+		InstanceID:               "", // cleared
+	})
+	return nil
+}

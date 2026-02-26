@@ -63,6 +63,7 @@ type IMClient interface {
 	GetChatInfo(participants []string) (*ChatInfoResponse, error)
 	GetContact(identifier string) (*ContactResponse, error)
 	DeleteChat(participants []string, groupName *string) error
+	ClearInstanceID() error
 
 	SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart, effect, subject *string) (string, error)
 	SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart, effect, subject, caption *string) (string, error)
