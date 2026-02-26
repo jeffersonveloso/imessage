@@ -64,7 +64,9 @@ pub enum AnisetteError {
     #[error("ClearADI Error {0}")]
     ClearADIError(#[from] clearadi::ClearAdiError),
     #[error("{0}")]
-    Anyhow(#[from] anyhow::Error)
+    Anyhow(#[from] anyhow::Error),
+    #[error("Provisioning error: {0}")]
+    AnisetteProvisioningError(String),
 }
 
 pub const DEFAULT_ANISETTE_URL: &str = "https://ani.f1sh.me/";

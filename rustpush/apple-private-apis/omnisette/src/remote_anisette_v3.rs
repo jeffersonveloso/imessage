@@ -283,7 +283,8 @@ impl AnisetteClient {
             ProvisioningSuccess {
                 #[allow(dead_code)] // it's not even dead, rust just has problems
                 adi_pb: String
-            }
+            },
+            Timeout,
         }
 
         loop {
@@ -345,6 +346,10 @@ impl AnisetteClient {
                             tk: response.get("tk").unwrap().as_string().unwrap(),
                         };
                         connection.send(Message::Text(serde_json::to_string(&end_provisioning)?)).await?;
+                    },
+                    ProvisionInput::Timeout => {
+                        connection.close(None).await.ok();
+                        return Err(AnisetteError::AnisetteProvisioningError("Remote anisette server timed out during provisioning".to_string()));
                     },
                     ProvisionInput::ProvisioningSuccess { adi_pb } => {
                         debug!("ProvisioningSuccess");
