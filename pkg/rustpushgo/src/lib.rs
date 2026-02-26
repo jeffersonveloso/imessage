@@ -1724,17 +1724,54 @@ pub async fn login_start(
                 Ok(_) => info!("send_2fa_to_devices succeeded"),
                 Err(e) => error!("send_2fa_to_devices failed: {}", e),
             }
-            // Request SMS delivery and capture the VerifyBody for later verification
-            match account.send_sms_2fa_to_devices(1).await {
-                Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
-                    info!("SMS 2FA sent, captured VerifyBody for SMS verification");
-                    *sms_verify_body_holder.lock().await = Some(body);
-                }
-                Ok(other) => {
-                    info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
+
+            // Query available trusted phone numbers via get_auth_extras.
+            // If status 201, Apple already sent the SMS and provides a VerifyBody directly.
+            // Otherwise, pick the first trusted phone and request SMS delivery.
+            match account.get_auth_extras().await {
+                Ok(extras) => {
+                    if let Some(state) = extras.new_state {
+                        // Status 201 — Apple already sent SMS, use the provided VerifyBody
+                        if let icloud_auth::LoginState::NeedsSMS2FAVerification(body) = state {
+                            info!("SMS already sent by Apple (status 201), captured VerifyBody");
+                            *sms_verify_body_holder.lock().await = Some(body);
+                        } else {
+                            info!("get_auth_extras returned unexpected new_state: {:?}", state);
+                        }
+                    } else if let Some(phone) = extras.trusted_phone_numbers.first() {
+                        info!("Found {} trusted phone(s), requesting SMS to phone id={} ({})",
+                            extras.trusted_phone_numbers.len(), phone.id, phone.number_with_dial_code);
+                        match account.send_sms_2fa_to_devices(phone.id).await {
+                            Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
+                                info!("SMS 2FA sent to phone id={}, captured VerifyBody", phone.id);
+                                *sms_verify_body_holder.lock().await = Some(body);
+                            }
+                            Ok(other) => {
+                                info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
+                            }
+                            Err(e) => {
+                                error!("send_sms_2fa_to_devices failed: {}", e);
+                            }
+                        }
+                    } else {
+                        error!("No trusted phone numbers found");
+                    }
                 }
                 Err(e) => {
-                    error!("send_sms_2fa_to_devices failed: {}", e);
+                    // Fallback: try phone id 1 directly if get_auth_extras fails
+                    warn!("get_auth_extras failed ({}), falling back to phone id=1", e);
+                    match account.send_sms_2fa_to_devices(1).await {
+                        Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
+                            info!("SMS 2FA sent (fallback), captured VerifyBody");
+                            *sms_verify_body_holder.lock().await = Some(body);
+                        }
+                        Ok(other) => {
+                            info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
+                        }
+                        Err(e2) => {
+                            error!("send_sms_2fa_to_devices fallback also failed: {}", e2);
+                        }
+                    }
                 }
             }
             true
@@ -1776,26 +1813,49 @@ impl LoginSession {
         let mut guard = self.account.lock().await;
         let account = guard.as_mut().ok_or(WrappedError::GenericError { msg: "No active session".to_string() })?;
 
-        // Check if we have an SMS verify body — if so, use the SMS 2FA endpoint
-        let sms_body = self.sms_verify_body.lock().await.take();
+        // Clone the SMS verify body (don't consume it — we need it for retries)
+        let sms_body = self.sms_verify_body.lock().await.clone();
 
         let result = if let Some(body) = sms_body {
-            info!("[DEBUG-LOGIN] Verifying 2FA code via SMS endpoint (verify_sms_2fa)");
+            info!("Verifying 2FA code via SMS endpoint (verify_sms_2fa)");
             account.verify_sms_2fa(code, body).await
                 .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
         } else {
-            info!("[DEBUG-LOGIN] Verifying 2FA code via trusted device endpoint (verify_2fa)");
+            info!("Verifying 2FA code via trusted device endpoint (verify_2fa)");
             account.verify_2fa(code).await
                 .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
         };
 
-        info!("[DEBUG-LOGIN] 2FA verification returned: {:?}", result);
-        info!("[DEBUG-LOGIN] PET token available: {}", account.get_pet().is_some());
+        info!("2FA verification returned: {:?}", result);
+        info!("PET token available: {}", account.get_pet().is_some());
 
         match result {
-            icloud_auth::LoginState::LoggedIn => Ok(true),
+            icloud_auth::LoginState::LoggedIn => {
+                // Success — clear the SMS body since it's no longer needed
+                *self.sms_verify_body.lock().await = None;
+                Ok(true)
+            }
             icloud_auth::LoginState::NeedsExtraStep(_) => {
+                *self.sms_verify_body.lock().await = None;
                 Ok(account.get_pet().is_some())
+            }
+            icloud_auth::LoginState::NeedsLogin => {
+                // Tokens expired — re-authenticate with stored credentials
+                info!("2FA returned NeedsLogin — re-authenticating with stored credentials");
+                match account.login_email_pass(&self.username, &self.password_hash).await {
+                    Ok(icloud_auth::LoginState::LoggedIn) => {
+                        info!("Re-authentication succeeded");
+                        *self.sms_verify_body.lock().await = None;
+                        Ok(true)
+                    }
+                    Ok(other) => {
+                        info!("Re-authentication returned {:?}, treating as incomplete", other);
+                        Ok(false)
+                    }
+                    Err(e) => {
+                        Err(WrappedError::GenericError { msg: format!("Re-authentication failed: {}", e) })
+                    }
+                }
             }
             _ => Ok(false),
         }
