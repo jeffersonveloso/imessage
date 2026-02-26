@@ -201,7 +201,8 @@ const openapiSpec = `{
         "type": "object",
         "properties": {
           "participants": { "type": "array", "items": { "type": "string" }, "description": "Chat participants" },
-          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" }
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
+          "remote": { "type": "boolean", "default": false, "description": "Also notify all Apple devices to delete the chat (sends MoveToRecycleBin + PermanentDelete via APNs)" }
         },
         "required": ["participants"]
       },
@@ -492,7 +493,7 @@ const openapiSpec = `{
       "post": {
         "tags": ["Send"],
         "summary": "Delete a chat",
-        "description": "Soft-deletes local chat data (cloud_chat and cloud_message records) for the specified conversation.",
+        "description": "Deletes a chat. By default, soft-deletes local data only. Set 'remote: true' to also notify all Apple devices to delete the chat (sends MoveToRecycleBin + PermanentDelete via APNs).",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteChatRequest" } } } },
         "responses": {
           "200": { "description": "Chat deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },

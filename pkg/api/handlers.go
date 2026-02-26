@@ -690,9 +690,19 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Remote delete: notify all Apple devices to delete the chat.
+	if req.Remote {
+		if err := client.SendMoveToRecycleBin(req.Participants, req.GroupName, false); err != nil {
+			s.log.Err(err).Msg("Failed to send remote chat delete")
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to send remote delete: %v", err), "DELETE_FAILED")
+			return
+		}
+	}
+
+	// Local delete: soft-delete from the bridge database.
 	err = client.DeleteChat(req.Participants, req.GroupName)
 	if err != nil {
-		s.log.Err(err).Msg("Failed to delete chat")
+		s.log.Err(err).Msg("Failed to delete chat locally")
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to delete chat: %v", err), "DELETE_FAILED")
 		return
 	}

@@ -339,4 +339,5 @@ type ChatListResponse struct {
 type DeleteChatRequest struct {
 	Participants []string `json:"participants"`
 	GroupName    *string  `json:"group_name,omitempty"`
+	Remote       bool     `json:"remote,omitempty"` // Also notify Apple devices to delete the chat
 }
