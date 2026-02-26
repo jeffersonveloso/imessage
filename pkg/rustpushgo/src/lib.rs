@@ -5471,8 +5471,8 @@ impl LoginSession {
                 .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
         };
 
-        info!("2FA verification returned: {:?}", result);
-        info!("PET token available: {}", account.get_pet().is_some());
+        info!("[DEBUG-LOGIN] 2FA verification returned: {:?}", result);
+        info!("[DEBUG-LOGIN] PET token available: {}", account.get_pet().is_some());
 
         // verify_2fa returns NeedsLogin when Apple accepted the code (ec=0) but the
         // /validate response carried no X-Apple-PE-Token header — the normal
