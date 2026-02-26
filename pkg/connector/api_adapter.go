@@ -243,6 +243,41 @@ func (a *imClientAdapter) DeleteChat(participants []string, groupName *string) e
 	return a.client.cloudStore.deleteLocalChatByPortalID(ctx, portalID)
 }
 
+func (a *imClientAdapter) SendMoveToRecycleBin(participants []string, groupName *string, isSMS bool) error {
+	if a.client.client == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	conv := a.BuildGroupConversation(participants, groupName)
+	conv.IsSms = isSMS
+
+	// Build the chat GUID that Apple uses to identify the conversation.
+	// DM format: "iMessage;-;+15551234567" or "SMS;-;+15551234567"
+	// Group format: the sender_guid (group UUID)
+	var chatGuid string
+	isGroup := len(conv.Participants) > 2
+	if isGroup && conv.SenderGuid != nil && *conv.SenderGuid != "" {
+		chatGuid = *conv.SenderGuid
+	} else if !isGroup {
+		// Find the other participant (not self).
+		protocol := "iMessage"
+		if isSMS {
+			protocol = "SMS"
+		}
+		for _, p := range conv.Participants {
+			if !a.client.isMyHandle(p) {
+				chatGuid = fmt.Sprintf("%s;-;%s", protocol, stripIdentifierPrefix(p))
+				break
+			}
+		}
+	}
+	if chatGuid == "" {
+		return fmt.Errorf("could not determine chat GUID for conversation")
+	}
+
+	return a.client.client.SendMoveToRecycleBin(conv, a.client.handle, chatGuid)
+}
+
 func (a *imClientAdapter) SendDeliveryReceipt(conv rustpushgo.WrappedConversation, handle string) error {
 	return a.client.client.SendDeliveryReceipt(conv, handle)
 }

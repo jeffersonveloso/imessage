@@ -64,6 +64,7 @@ type IMClient interface {
 	GetChatInfo(participants []string) (*ChatInfoResponse, error)
 	GetContact(identifier string) (*ContactResponse, error)
 	DeleteChat(participants []string, groupName *string) error
+	SendMoveToRecycleBin(participants []string, groupName *string, isSMS bool) error
 	ClearInstanceID() error
 	SetHandle(handle string) error
 	GetStatusInfo() (contactsCount *int, contactsReady *bool, cloudSyncDone *bool)
