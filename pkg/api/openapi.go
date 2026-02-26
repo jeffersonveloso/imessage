@@ -311,8 +311,8 @@ const openapiSpec = `{
         "type": "object",
         "description": "Event POSTed to the configured webhook_url. The 'category' field groups related event types for easier routing.",
         "properties": {
-          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "rename", "participant_change", "icon_change", "connected", "disconnected"], "description": "Specific event type" },
-          "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt", "group_update"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction), message_receipt (typing/delivered/read_receipt), group_update (rename/participant_change/icon_change)" },
+          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "rename", "participant_change", "icon_change", "error", "connected", "disconnected"], "description": "Specific event type" },
+          "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt", "group_update", "error"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction), message_receipt (typing/delivered/read_receipt), group_update (rename/participant_change/icon_change), error (delivery failures)" },
           "timestamp": { "type": "integer", "description": "Unix timestamp in milliseconds" },
           "instance_id": { "type": "string", "description": "Caller-provided instance ID echoed in every webhook event" },
           "data": { "type": "object", "description": "Event-specific payload. Message events include: uuid, sender, text, subject, reply_to, has_attachment, attachments[]. Group update events include: sender, participants, plus type-specific fields (new_name, new_participants, photo_cleared)." }

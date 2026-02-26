@@ -239,6 +239,20 @@ type WebhookConnectionData struct {
 	AllHandles []string `json:"all_handles"`
 }
 
+// --- Error event webhook ---
+
+const WebhookCategoryError = "error"
+
+type WebhookErrorData struct {
+	ForUUID      string   `json:"for_uuid,omitempty"`
+	ErrorStatus  *uint64  `json:"error_status,omitempty"`
+	ErrorMessage *string  `json:"error_message,omitempty"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
+}
+
 // --- Feature 2: Attachment data in webhooks ---
 
 type WebhookAttachment struct {
