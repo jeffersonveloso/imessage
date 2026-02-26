@@ -337,7 +337,8 @@ type ChatListResponse struct {
 // --- Feature 5: Delete chat ---
 
 type DeleteChatRequest struct {
-	Participants []string `json:"participants"`
+	To           string   `json:"to,omitempty"`           // Recipient identifier for DM (tel:+... or mailto:...)
+	Participants []string `json:"participants,omitempty"`  // Group members including self (for group chats)
 	GroupName    *string  `json:"group_name,omitempty"`
-	Remote       bool     `json:"remote,omitempty"` // Also notify Apple devices to delete the chat
+	Remote       bool     `json:"remote,omitempty"`        // Also notify Apple devices to delete the chat
 }

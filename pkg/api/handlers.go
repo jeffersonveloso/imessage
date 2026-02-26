@@ -630,16 +630,26 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChatInfo(w http.ResponseWriter, r *http.Request) {
+	to := r.URL.Query().Get("to")
 	participantsParam := r.URL.Query().Get("participants")
-	if participantsParam == "" {
-		writeError(w, http.StatusBadRequest, "participants query parameter is required", "INVALID_REQUEST")
-		return
-	}
-	participants := strings.Split(participantsParam, ",")
 
 	client, err := s.provider.GetActiveClient()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	var participants []string
+	if to != "" && participantsParam != "" {
+		writeError(w, http.StatusBadRequest, "provide either 'to' (DM) or 'participants' (group), not both", "INVALID_REQUEST")
+		return
+	} else if to != "" {
+		normalized := client.NormalizeIdentifier(to)
+		participants = []string{client.Handle(), normalized}
+	} else if participantsParam != "" {
+		participants = strings.Split(participantsParam, ",")
+	} else {
+		writeError(w, http.StatusBadRequest, "provide either 'to' or 'participants' query parameter", "INVALID_REQUEST")
 		return
 	}
 
@@ -679,10 +689,6 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if len(req.Participants) == 0 {
-		writeError(w, http.StatusBadRequest, "participants is required", "INVALID_REQUEST")
-		return
-	}
 
 	client, err := s.provider.GetActiveClient()
 	if err != nil {
@@ -690,9 +696,22 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve participants: either 'to' (DM) or 'participants' (group).
+	participants := req.Participants
+	hasDM := req.To != ""
+	hasGroup := len(participants) > 0
+	if hasDM == hasGroup {
+		writeError(w, http.StatusBadRequest, "provide either 'to' (DM) or 'participants' (group), not both", "INVALID_REQUEST")
+		return
+	}
+	if hasDM {
+		normalized := client.NormalizeIdentifier(req.To)
+		participants = []string{client.Handle(), normalized}
+	}
+
 	// Remote delete: notify all Apple devices to delete the chat.
 	if req.Remote {
-		if err := client.SendMoveToRecycleBin(req.Participants, req.GroupName, false); err != nil {
+		if err := client.SendMoveToRecycleBin(participants, req.GroupName, false); err != nil {
 			s.log.Err(err).Msg("Failed to send remote chat delete")
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to send remote delete: %v", err), "DELETE_FAILED")
 			return
@@ -700,7 +719,7 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Local delete: soft-delete from the bridge database.
-	err = client.DeleteChat(req.Participants, req.GroupName)
+	err = client.DeleteChat(participants, req.GroupName)
 	if err != nil {
 		s.log.Err(err).Msg("Failed to delete chat locally")
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to delete chat: %v", err), "DELETE_FAILED")

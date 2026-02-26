@@ -199,12 +199,13 @@ const openapiSpec = `{
       },
       "DeleteChatRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "participants": { "type": "array", "items": { "type": "string" }, "description": "Chat participants" },
+          "to": { "type": "string", "description": "Recipient identifier for DM (tel:+... or mailto:...)", "example": "tel:+15551234567" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self (for group chats)" },
           "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "remote": { "type": "boolean", "default": false, "description": "Also notify all Apple devices to delete the chat (sends MoveToRecycleBin + PermanentDelete via APNs)" }
-        },
-        "required": ["participants"]
+        }
       },
       "ChatInfoResponse": {
         "type": "object",
@@ -505,9 +506,10 @@ const openapiSpec = `{
       "get": {
         "tags": ["Query"],
         "summary": "Get chat info",
-        "description": "Returns participants and group name for a conversation identified by its participant list.",
+        "description": "Returns participants and group name for a conversation. Provide either 'to' (DM) or 'participants' (group), not both.",
         "parameters": [
-          { "name": "participants", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Comma-separated participant identifiers (e.g. tel:+1...,tel:+2...)" }
+          { "name": "to", "in": "query", "schema": { "type": "string" }, "description": "Recipient identifier for DM (e.g. tel:+15551234567)" },
+          { "name": "participants", "in": "query", "schema": { "type": "string" }, "description": "Comma-separated participant identifiers for group (e.g. tel:+1...,tel:+2...)" }
         ],
         "responses": {
           "200": { "description": "Chat info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatInfoResponse" } } } },
