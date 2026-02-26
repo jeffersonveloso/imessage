@@ -542,6 +542,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 	handle := client.Handle()
 	client.Disconnect()
+	s.SetInstanceID("")
 
 	s.log.Info().Str("handle", handle).Msg("Client disconnected via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})

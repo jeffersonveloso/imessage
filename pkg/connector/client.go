@@ -998,7 +998,19 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 			IsGroup:      isGroup,
 			IsSMS:        msg.IsSms,
 		}
-	case msg.IsError, msg.IsPeerCacheInvalidate, msg.IsMoveToRecycleBin,
+	case msg.IsError:
+		eventType = "error"
+		category = api.WebhookCategoryError
+		data = api.WebhookErrorData{
+			ForUUID:      ptrStringOr(msg.ErrorForUuid, ""),
+			ErrorStatus:  msg.ErrorStatus,
+			ErrorMessage: msg.ErrorStatusStr,
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
+		}
+	case msg.IsPeerCacheInvalidate, msg.IsMoveToRecycleBin,
 		msg.IsPermanentDelete:
 		// Internal/control events — not dispatched via webhook.
 		return

@@ -428,6 +428,7 @@ When `webhook_url` is configured, the API POSTs JSON events for incoming message
 | `rename` | `group_update` | Group chat renamed |
 | `participant_change` | `group_update` | Group members added/removed |
 | `icon_change` | `group_update` | Group photo changed/cleared |
+| `error` | `error` | Message delivery failure (includes target UUID and error details) |
 | `connected` | `connection` | iMessage session connected |
 | `disconnected` | `connection` | iMessage session disconnected |
 
