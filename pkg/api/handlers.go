@@ -589,6 +589,28 @@ func (s *Server) handleSetHandle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
 }
 
+func (s *Server) handleReconnect(w http.ResponseWriter, r *http.Request) {
+	if err := s.provider.Reconnect(r.Context()); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "RECONNECT_FAILED")
+		return
+	}
+	s.log.Info().Msg("Reconnect triggered via API")
+	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
+}
+
+func (s *Server) handleChats(w http.ResponseWriter, r *http.Request) {
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+	chats := client.GetAllChats()
+	if chats == nil {
+		chats = []ChatListEntry{}
+	}
+	writeJSON(w, http.StatusOK, ChatListResponse{Chats: chats})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	client, err := s.provider.GetActiveClient()
 	if err != nil {

@@ -274,6 +274,53 @@ func (a *imClientAdapter) SetHandle(handle string) error {
 	return nil
 }
 
+func (a *imClientAdapter) GetAllChats() []api.ChatListEntry {
+	seen := make(map[string]bool)
+	var chats []api.ChatListEntry
+
+	// Iterate imGroupParticipants for the authoritative participant lists.
+	a.client.imGroupParticipantsMu.RLock()
+	for portalID, participants := range a.client.imGroupParticipants {
+		seen[portalID] = true
+		var groupName *string
+		a.client.imGroupNamesMu.RLock()
+		if name, ok := a.client.imGroupNames[portalID]; ok {
+			groupName = &name
+		}
+		a.client.imGroupNamesMu.RUnlock()
+		chats = append(chats, api.ChatListEntry{
+			Participants: participants,
+			GroupName:    groupName,
+			IsGroup:      len(participants) > 2,
+		})
+	}
+	a.client.imGroupParticipantsMu.RUnlock()
+
+	// Also include chats that have a name but no cached participants
+	// (e.g., discovered via rename events).
+	a.client.imGroupNamesMu.RLock()
+	for portalID, name := range a.client.imGroupNames {
+		if seen[portalID] {
+			continue
+		}
+		nameCopy := name
+		// Parse participants from the portal ID (comma-separated).
+		parts := strings.Split(portalID, ",")
+		if strings.HasPrefix(portalID, "gid:") {
+			// gid: prefixed portals don't encode participants in the ID.
+			parts = nil
+		}
+		chats = append(chats, api.ChatListEntry{
+			Participants: parts,
+			GroupName:    &nameCopy,
+			IsGroup:      len(parts) > 2 || strings.HasPrefix(portalID, "gid:"),
+		})
+	}
+	a.client.imGroupNamesMu.RUnlock()
+
+	return chats
+}
+
 func (a *imClientAdapter) GetStatusInfo() (contactsCount *int, contactsReady *bool, cloudSyncDone *bool) {
 	if a.client.contacts != nil {
 		count := len(a.client.contacts.GetAllContacts())

@@ -322,6 +322,18 @@ type ContactResponse struct {
 	Emails      []string `json:"emails,omitempty"`
 }
 
+// --- Chat list ---
+
+type ChatListEntry struct {
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+}
+
+type ChatListResponse struct {
+	Chats []ChatListEntry `json:"chats"`
+}
+
 // --- Feature 5: Delete chat ---
 
 type DeleteChatRequest struct {

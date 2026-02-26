@@ -10,6 +10,7 @@ import (
 // Implemented by the connector package.
 type IMClientProvider interface {
 	GetActiveClient() (IMClient, error)
+	Reconnect(ctx context.Context) error
 }
 
 // LoginProvider exposes the bridge's login flows over HTTP.
@@ -66,6 +67,7 @@ type IMClient interface {
 	ClearInstanceID() error
 	SetHandle(handle string) error
 	GetStatusInfo() (contactsCount *int, contactsReady *bool, cloudSyncDone *bool)
+	GetAllChats() []ChatListEntry
 
 	SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart, effect, subject *string) (string, error)
 	SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart, effect, subject, caption *string) (string, error)
