@@ -59,6 +59,11 @@ type IMClient interface {
 	NormalizeIdentifier(identifier string) string
 	MimeToUTI(mime string) string
 
+	BuildGroupConversation(participants []string, groupName *string) rustpushgo.WrappedConversation
+	GetChatInfo(participants []string) (*ChatInfoResponse, error)
+	GetContact(identifier string) (*ContactResponse, error)
+	DeleteChat(participants []string, groupName *string) error
+
 	SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart, effect, subject *string) (string, error)
 	SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart, effect, subject, caption *string) (string, error)
 	SendTapback(conv rustpushgo.WrappedConversation, targetUuid string, targetPart uint64, reaction uint32, emoji *string, remove bool, handle string) (string, error)

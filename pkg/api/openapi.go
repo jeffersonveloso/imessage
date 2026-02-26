@@ -61,8 +61,11 @@ const openapiSpec = `{
       },
       "SendRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string", "description": "Recipient identifier (tel:+... or mailto:...)", "example": "tel:+15551234567" },
+          "to": { "type": "string", "description": "Recipient identifier for DM (tel:+... or mailto:...)", "example": "tel:+15551234567" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self (for group messaging)" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "text": { "type": "string", "example": "Hello from the API!" },
           "is_sms": { "type": "boolean", "default": false },
           "reply_to": { "type": "string", "description": "UUID of message to reply to" },
@@ -70,13 +73,15 @@ const openapiSpec = `{
           "effect_id": { "type": "string", "description": "iMessage bubble/screen effect ID (e.g. com.apple.MobileSMS.expressivesend.impact, .gentle, .loud, .invisibleink, com.apple.messages.effect.CKHeartEffect)" },
           "subject": { "type": "string", "description": "Bold subject line displayed above the message body" }
         },
-        "required": ["to", "text"]
+        "required": ["text"]
       },
       "SendMediaRequest": {
         "type": "object",
-        "description": "Send media via JSON. Provide either 'data' (base64) or 'url' (server-side fetch), not both. When using 'url', mime_type and filename are auto-detected if omitted.",
+        "description": "Send media via JSON. Provide either 'to' for DM or 'participants' for group. Provide either 'data' (base64) or 'url' (server-side fetch), not both.",
         "properties": {
-          "to": { "type": "string", "example": "tel:+15551234567" },
+          "to": { "type": "string", "description": "Recipient identifier for DM", "example": "tel:+15551234567" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self (for group messaging)" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "data": { "type": "string", "description": "Base64-encoded file data (optional if url is set)" },
           "url": { "type": "string", "format": "uri", "description": "URL to fetch the file from server-side (optional if data is set). Max 100 MB." },
           "mime_type": { "type": "string", "example": "image/jpeg", "description": "MIME type. Auto-detected from URL response if omitted." },
@@ -87,15 +92,16 @@ const openapiSpec = `{
           "effect_id": { "type": "string", "description": "iMessage bubble/screen effect ID" },
           "subject": { "type": "string", "description": "Bold subject line displayed above the message body" },
           "caption": { "type": "string", "description": "Text caption sent alongside the attachment" }
-        },
-        "required": ["to"]
+        }
       },
       "SendMediaMultipartRequest": {
         "type": "object",
-        "description": "Send media via multipart/form-data. The file is uploaded as a binary 'file' field. Max 100 MB.",
+        "description": "Send media via multipart/form-data. Provide either 'to' for DM or 'participants' for group. Max 100 MB.",
         "properties": {
           "file": { "type": "string", "format": "binary", "description": "The media file to send" },
-          "to": { "type": "string", "example": "tel:+15551234567" },
+          "to": { "type": "string", "description": "Recipient identifier for DM", "example": "tel:+15551234567" },
+          "participants": { "type": "string", "description": "Comma-separated group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "mime_type": { "type": "string", "description": "MIME type. Auto-detected from upload if omitted." },
           "filename": { "type": "string", "description": "Filename. Auto-detected from upload if omitted." },
           "is_sms": { "type": "string", "enum": ["true", "false"], "default": "false" },
@@ -105,12 +111,15 @@ const openapiSpec = `{
           "subject": { "type": "string" },
           "caption": { "type": "string" }
         },
-        "required": ["file", "to"]
+        "required": ["file"]
       },
       "ReactRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string", "example": "tel:+15551234567" },
+          "to": { "type": "string", "description": "Recipient identifier for DM", "example": "tel:+15551234567" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "target_uuid": { "type": "string", "description": "UUID of the message to react to" },
           "target_part": { "type": "integer", "default": 0 },
           "reaction": { "type": "string", "enum": ["heart", "like", "dislike", "laugh", "emphasize", "question", "emoji"] },
@@ -118,44 +127,92 @@ const openapiSpec = `{
           "remove": { "type": "boolean", "default": false },
           "is_sms": { "type": "boolean", "default": false }
         },
-        "required": ["to", "target_uuid", "reaction"]
+        "required": ["target_uuid", "reaction"]
       },
       "EditRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string" },
+          "to": { "type": "string", "description": "Recipient identifier for DM" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "target_uuid": { "type": "string", "description": "UUID of the message to edit" },
           "new_text": { "type": "string" },
           "is_sms": { "type": "boolean", "default": false }
         },
-        "required": ["to", "target_uuid", "new_text"]
+        "required": ["target_uuid", "new_text"]
       },
       "UnsendRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string" },
+          "to": { "type": "string", "description": "Recipient identifier for DM" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "target_uuid": { "type": "string", "description": "UUID of the message to unsend" },
           "is_sms": { "type": "boolean", "default": false }
         },
-        "required": ["to", "target_uuid"]
+        "required": ["target_uuid"]
       },
       "TypingRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string" },
+          "to": { "type": "string", "description": "Recipient identifier for DM" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "typing": { "type": "boolean" },
           "is_sms": { "type": "boolean", "default": false }
         },
-        "required": ["to", "typing"]
+        "required": ["typing"]
       },
       "ReadReceiptRequest": {
         "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
         "properties": {
-          "to": { "type": "string" },
+          "to": { "type": "string", "description": "Recipient identifier for DM" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
           "for_uuid": { "type": "string", "description": "UUID of specific message to mark as read" },
           "is_sms": { "type": "boolean", "default": false }
+        }
+      },
+      "DeleteChatRequest": {
+        "type": "object",
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Chat participants" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" }
         },
-        "required": ["to"]
+        "required": ["participants"]
+      },
+      "ChatInfoResponse": {
+        "type": "object",
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" } },
+          "group_name": { "type": "string" },
+          "is_group": { "type": "boolean" }
+        },
+        "required": ["participants", "is_group"]
+      },
+      "ContactResponse": {
+        "type": "object",
+        "properties": {
+          "identifier": { "type": "string", "example": "tel:+15551234567" },
+          "display_name": { "type": "string", "example": "John Doe" },
+          "phones": { "type": "array", "items": { "type": "string" } },
+          "emails": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["identifier", "display_name"]
+      },
+      "WebhookAttachment": {
+        "type": "object",
+        "properties": {
+          "mime_type": { "type": "string", "example": "image/jpeg" },
+          "filename": { "type": "string", "example": "photo.jpg" },
+          "size": { "type": "integer", "description": "File size in bytes" },
+          "data": { "type": "string", "description": "Base64-encoded file data (null if unavailable)" }
+        },
+        "required": ["mime_type", "filename", "size"]
       },
       "ValidateRequest": {
         "type": "object",
@@ -254,11 +311,11 @@ const openapiSpec = `{
         "type": "object",
         "description": "Event POSTed to the configured webhook_url. The 'category' field groups related event types for easier routing.",
         "properties": {
-          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "connected", "disconnected"], "description": "Specific event type" },
-          "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction on existing messages), message_receipt (typing/delivered/read_receipt indicators)" },
+          "type": { "type": "string", "enum": ["message", "reaction", "typing", "read_receipt", "delivered", "edit", "unsend", "rename", "participant_change", "icon_change", "connected", "disconnected"], "description": "Specific event type" },
+          "category": { "type": "string", "enum": ["connection", "message", "message_update", "message_receipt", "group_update"], "description": "Event category: connection (connected/disconnected), message (new incoming messages), message_update (edit/unsend/reaction), message_receipt (typing/delivered/read_receipt), group_update (rename/participant_change/icon_change)" },
           "timestamp": { "type": "integer", "description": "Unix timestamp in milliseconds" },
           "instance_id": { "type": "string", "description": "Caller-provided instance ID echoed in every webhook event" },
-          "data": { "type": "object", "description": "Event-specific payload. All message-related events (category != connection) include: participants, group_name, is_group, is_sms. Message events additionally include: uuid, sender, text, subject, reply_to, has_attachment. Update events include: uuid, sender, target_uuid, plus type-specific fields." }
+          "data": { "type": "object", "description": "Event-specific payload. Message events include: uuid, sender, text, subject, reply_to, has_attachment, attachments[]. Group update events include: sender, participants, plus type-specific fields (new_name, new_participants, photo_cleared)." }
         }
       }
     }
@@ -367,6 +424,46 @@ const openapiSpec = `{
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReadReceiptRequest" } } } },
         "responses": {
           "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } }
+        }
+      }
+    },
+    "/api/v1/delete-chat": {
+      "post": {
+        "tags": ["Send"],
+        "summary": "Delete a chat",
+        "description": "Soft-deletes local chat data (cloud_chat and cloud_message records) for the specified conversation.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteChatRequest" } } } },
+        "responses": {
+          "200": { "description": "Chat deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },
+          "503": { "description": "Not connected" }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Get chat info",
+        "description": "Returns participants and group name for a conversation identified by its participant list.",
+        "parameters": [
+          { "name": "participants", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Comma-separated participant identifiers (e.g. tel:+1...,tel:+2...)" }
+        ],
+        "responses": {
+          "200": { "description": "Chat info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatInfoResponse" } } } },
+          "503": { "description": "Not connected" }
+        }
+      }
+    },
+    "/api/v1/contact": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "Look up contact",
+        "description": "Returns display name, phone numbers, and email addresses for a given identifier.",
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Contact identifier (e.g. tel:+15551234567)" }
+        ],
+        "responses": {
+          "200": { "description": "Contact info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactResponse" } } } },
+          "503": { "description": "Not connected" }
         }
       }
     },
