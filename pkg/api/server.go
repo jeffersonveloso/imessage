@@ -64,7 +64,9 @@ func New(cfg Config, provider IMClientProvider, loginProvider LoginProvider, log
 	mux.HandleFunc("POST /api/v1/unsend", s.handleUnsend)
 	mux.HandleFunc("POST /api/v1/typing", s.handleTyping)
 	mux.HandleFunc("POST /api/v1/read-receipt", s.handleReadReceipt)
+	mux.HandleFunc("POST /api/v1/delivery-receipt", s.handleDeliveryReceipt)
 	mux.HandleFunc("POST /api/v1/delete-chat", s.handleDeleteChat)
+	mux.HandleFunc("POST /api/v1/set-handle", s.handleSetHandle)
 
 	// Login
 	mux.HandleFunc("GET /api/v1/login/flows", s.handleLoginFlows)

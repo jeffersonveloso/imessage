@@ -64,6 +64,8 @@ type IMClient interface {
 	GetContact(identifier string) (*ContactResponse, error)
 	DeleteChat(participants []string, groupName *string) error
 	ClearInstanceID() error
+	SetHandle(handle string) error
+	GetStatusInfo() (contactsCount *int, contactsReady *bool, cloudSyncDone *bool)
 
 	SendMessage(conv rustpushgo.WrappedConversation, text, handle string, replyGuid, replyPart, effect, subject *string) (string, error)
 	SendAttachment(conv rustpushgo.WrappedConversation, data []byte, mime, uti, filename, handle string, replyGuid, replyPart, effect, subject, caption *string) (string, error)
@@ -72,5 +74,6 @@ type IMClient interface {
 	SendUnsend(conv rustpushgo.WrappedConversation, targetUuid string, editPart uint64, handle string) (string, error)
 	SendTyping(conv rustpushgo.WrappedConversation, typing bool, handle string) error
 	SendReadReceipt(conv rustpushgo.WrappedConversation, handle string, forUuid *string) error
+	SendDeliveryReceipt(conv rustpushgo.WrappedConversation, handle string) error
 	ValidateTargets(targets []string, handle string) []string
 }
