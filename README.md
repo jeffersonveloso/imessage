@@ -398,7 +398,11 @@ curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json
   -d '{"targets":["tel:+15551234567","mailto:user@example.com"]}' \
   http://localhost:8080/api/v1/validate
 
-# Look up chat info
+# Look up chat info (DM)
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/v1/chat?to=tel:+15551234567"
+
+# Look up chat info (group)
 curl -H "Authorization: Bearer TOKEN" \
   "http://localhost:8080/api/v1/chat?participants=tel:+15551234567,tel:+15559876543"
 
@@ -422,9 +426,14 @@ curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/v1/chats
 # Reconnect (disconnect and re-establish session)
 curl -X POST -H "Authorization: Bearer TOKEN" http://localhost:8080/api/v1/reconnect
 
-# Delete chat
+# Delete chat (DM)
 curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
-  -d '{"participants":["tel:+15551234567","tel:+15559876543"]}' \
+  -d '{"to":"tel:+15551234567"}' \
+  http://localhost:8080/api/v1/delete-chat
+
+# Delete chat (group, also remove from Apple devices)
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"participants":["tel:+15551234567","tel:+15559876543"],"remote":true}' \
   http://localhost:8080/api/v1/delete-chat
 ```
 
