@@ -1724,54 +1724,17 @@ pub async fn login_start(
                 Ok(_) => info!("send_2fa_to_devices succeeded"),
                 Err(e) => error!("send_2fa_to_devices failed: {}", e),
             }
-
-            // Query available trusted phone numbers via get_auth_extras.
-            // If status 201, Apple already sent the SMS and provides a VerifyBody directly.
-            // Otherwise, pick the first trusted phone and request SMS delivery.
-            match account.get_auth_extras().await {
-                Ok(extras) => {
-                    if let Some(state) = extras.new_state {
-                        // Status 201 — Apple already sent SMS, use the provided VerifyBody
-                        if let icloud_auth::LoginState::NeedsSMS2FAVerification(body) = state {
-                            info!("SMS already sent by Apple (status 201), captured VerifyBody");
-                            *sms_verify_body_holder.lock().await = Some(body);
-                        } else {
-                            info!("get_auth_extras returned unexpected new_state: {:?}", state);
-                        }
-                    } else if let Some(phone) = extras.trusted_phone_numbers.first() {
-                        info!("Found {} trusted phone(s), requesting SMS to phone id={} ({})",
-                            extras.trusted_phone_numbers.len(), phone.id, phone.number_with_dial_code);
-                        match account.send_sms_2fa_to_devices(phone.id).await {
-                            Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
-                                info!("SMS 2FA sent to phone id={}, captured VerifyBody", phone.id);
-                                *sms_verify_body_holder.lock().await = Some(body);
-                            }
-                            Ok(other) => {
-                                info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
-                            }
-                            Err(e) => {
-                                error!("send_sms_2fa_to_devices failed: {}", e);
-                            }
-                        }
-                    } else {
-                        error!("No trusted phone numbers found");
-                    }
+            // Request SMS delivery to default phone (same as upstream)
+            match account.send_sms_2fa_to_devices(1).await {
+                Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
+                    info!("SMS 2FA sent, captured VerifyBody");
+                    *sms_verify_body_holder.lock().await = Some(body);
+                }
+                Ok(other) => {
+                    info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
                 }
                 Err(e) => {
-                    // Fallback: try phone id 1 directly if get_auth_extras fails
-                    warn!("get_auth_extras failed ({}), falling back to phone id=1", e);
-                    match account.send_sms_2fa_to_devices(1).await {
-                        Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
-                            info!("SMS 2FA sent (fallback), captured VerifyBody");
-                            *sms_verify_body_holder.lock().await = Some(body);
-                        }
-                        Ok(other) => {
-                            info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
-                        }
-                        Err(e2) => {
-                            error!("send_sms_2fa_to_devices fallback also failed: {}", e2);
-                        }
-                    }
+                    error!("send_sms_2fa_to_devices failed: {}", e);
                 }
             }
             true
