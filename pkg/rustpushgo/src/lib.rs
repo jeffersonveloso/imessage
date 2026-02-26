@@ -1667,6 +1667,7 @@ pub struct LoginSession {
     username: String,
     password_hash: Vec<u8>,
     needs_2fa: bool,
+    sms_verify_body: tokio::sync::Mutex<Option<icloud_auth::VerifyBody>>,
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -1699,6 +1700,7 @@ pub async fn login_start(
         .map_err(|e| WrappedError::GenericError { msg: format!("Login failed: {}", e) })?;
 
     info!("login_email_pass returned: {:?}", result);
+    let sms_verify_body_holder: tokio::sync::Mutex<Option<icloud_auth::VerifyBody>> = tokio::sync::Mutex::new(None);
     let needs_2fa = match result {
         icloud_auth::LoginState::LoggedIn => {
             info!("Login completed without 2FA");
@@ -1708,16 +1710,38 @@ pub async fn login_start(
             info!("2FA required (Needs2FAVerification — push already sent by Apple)");
             true
         }
-        icloud_auth::LoginState::NeedsDevice2FA | icloud_auth::LoginState::NeedsSMS2FA => {
-            info!("2FA required — sending trusted device push");
+        icloud_auth::LoginState::NeedsDevice2FA => {
+            info!("2FA required (NeedsDevice2FA) — sending trusted device push");
             match account.send_2fa_to_devices().await {
                 Ok(_) => info!("send_2fa_to_devices succeeded"),
                 Err(e) => error!("send_2fa_to_devices failed: {}", e),
             }
             true
         }
-        icloud_auth::LoginState::NeedsSMS2FAVerification(_) => {
+        icloud_auth::LoginState::NeedsSMS2FA => {
+            info!("2FA required (NeedsSMS2FA) — sending trusted device push, then requesting SMS");
+            match account.send_2fa_to_devices().await {
+                Ok(_) => info!("send_2fa_to_devices succeeded"),
+                Err(e) => error!("send_2fa_to_devices failed: {}", e),
+            }
+            // Request SMS delivery and capture the VerifyBody for later verification
+            match account.send_sms_2fa_to_devices(1).await {
+                Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
+                    info!("SMS 2FA sent, captured VerifyBody for SMS verification");
+                    *sms_verify_body_holder.lock().await = Some(body);
+                }
+                Ok(other) => {
+                    info!("send_sms_2fa_to_devices returned unexpected state: {:?}", other);
+                }
+                Err(e) => {
+                    error!("send_sms_2fa_to_devices failed: {}", e);
+                }
+            }
+            true
+        }
+        icloud_auth::LoginState::NeedsSMS2FAVerification(body) => {
             info!("2FA required (NeedsSMS2FAVerification — SMS already sent)");
+            *sms_verify_body_holder.lock().await = Some(body);
             true
         }
         icloud_auth::LoginState::NeedsExtraStep(ref step) => {
@@ -1738,6 +1762,7 @@ pub async fn login_start(
         username: user_trimmed,
         password_hash: pw_bytes,
         needs_2fa,
+        sms_verify_body: sms_verify_body_holder,
     }))
 }
 
@@ -1751,12 +1776,21 @@ impl LoginSession {
         let mut guard = self.account.lock().await;
         let account = guard.as_mut().ok_or(WrappedError::GenericError { msg: "No active session".to_string() })?;
 
-        info!("Verifying 2FA code via trusted device endpoint (verify_2fa)");
-        let result = account.verify_2fa(code).await
-            .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?;
+        // Check if we have an SMS verify body — if so, use the SMS 2FA endpoint
+        let sms_body = self.sms_verify_body.lock().await.take();
 
-        info!("2FA verification returned: {:?}", result);
-        info!("PET token available: {}", account.get_pet().is_some());
+        let result = if let Some(body) = sms_body {
+            info!("[DEBUG-LOGIN] Verifying 2FA code via SMS endpoint (verify_sms_2fa)");
+            account.verify_sms_2fa(code, body).await
+                .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
+        } else {
+            info!("[DEBUG-LOGIN] Verifying 2FA code via trusted device endpoint (verify_2fa)");
+            account.verify_2fa(code).await
+                .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
+        };
+
+        info!("[DEBUG-LOGIN] 2FA verification returned: {:?}", result);
+        info!("[DEBUG-LOGIN] PET token available: {}", account.get_pet().is_some());
 
         match result {
             icloud_auth::LoginState::LoggedIn => Ok(true),
