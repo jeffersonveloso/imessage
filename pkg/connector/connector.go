@@ -50,6 +50,19 @@ func (c *IMConnector) GetActiveClient() (api.IMClient, error) {
 	return nil, errors.New("no active iMessage connection")
 }
 
+// Reconnect disconnects and re-establishes the iMessage session.
+// Works on any cached login with credentials, even if currently disconnected.
+func (c *IMConnector) Reconnect(ctx context.Context) error {
+	for _, login := range c.Bridge.GetAllCachedUserLogins() {
+		if client, ok := login.Client.(*IMClient); ok {
+			client.Disconnect()
+			go client.Connect(ctx)
+			return nil
+		}
+	}
+	return errors.New("no login found — please log in first")
+}
+
 func (c *IMConnector) GetName() bridgev2.BridgeName {
 	return bridgev2.BridgeName{
 		DisplayName:      "iMessage",

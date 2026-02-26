@@ -214,6 +214,22 @@ const openapiSpec = `{
         },
         "required": ["participants", "is_group"]
       },
+      "ChatListEntry": {
+        "type": "object",
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" } },
+          "group_name": { "type": "string" },
+          "is_group": { "type": "boolean" }
+        },
+        "required": ["participants", "is_group"]
+      },
+      "ChatListResponse": {
+        "type": "object",
+        "properties": {
+          "chats": { "type": "array", "items": { "$ref": "#/components/schemas/ChatListEntry" } }
+        },
+        "required": ["chats"]
+      },
       "ContactResponse": {
         "type": "object",
         "properties": {
@@ -498,6 +514,17 @@ const openapiSpec = `{
         }
       }
     },
+    "/api/v1/chats": {
+      "get": {
+        "tags": ["Query"],
+        "summary": "List all known chats",
+        "description": "Returns all conversations currently tracked by the bridge, including participants and group names.",
+        "responses": {
+          "200": { "description": "Chat list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatListResponse" } } } },
+          "503": { "description": "Not connected" }
+        }
+      }
+    },
     "/api/v1/contact": {
       "get": {
         "tags": ["Query"],
@@ -542,6 +569,17 @@ const openapiSpec = `{
         "responses": {
           "200": { "description": "Next step or completion", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginStepResponse" } } } },
           "404": { "description": "Session not found or expired" }
+        }
+      }
+    },
+    "/api/v1/reconnect": {
+      "post": {
+        "tags": ["Session"],
+        "summary": "Reconnect",
+        "description": "Disconnects and re-establishes the iMessage session using existing credentials. Returns immediately; the connection is re-established asynchronously. Monitor the status endpoint or webhook for the 'connected' event.",
+        "responses": {
+          "200": { "description": "Reconnect initiated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },
+          "503": { "description": "No login found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },

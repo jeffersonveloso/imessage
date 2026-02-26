@@ -416,6 +416,12 @@ curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json
   -d '{"handle":"mailto:you@icloud.com"}' \
   http://localhost:8080/api/v1/set-handle
 
+# List all known chats
+curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/v1/chats
+
+# Reconnect (disconnect and re-establish session)
+curl -X POST -H "Authorization: Bearer TOKEN" http://localhost:8080/api/v1/reconnect
+
 # Delete chat
 curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
   -d '{"participants":["tel:+15551234567","tel:+15559876543"]}' \
@@ -455,6 +461,7 @@ Each request includes:
 | GET | `/api/v1/handles` | List registered handles |
 | POST | `/api/v1/validate` | Check if targets are on iMessage |
 | GET | `/api/v1/chat` | Get chat info (participants, group name) |
+| GET | `/api/v1/chats` | List all known conversations |
 | GET | `/api/v1/contact` | Look up contact display name and details |
 | POST | `/api/v1/send` | Send text message (DM or group) |
 | POST | `/api/v1/send-media` | Send media attachment (DM or group) |
@@ -466,6 +473,7 @@ Each request includes:
 | POST | `/api/v1/delivery-receipt` | Send delivery receipt |
 | POST | `/api/v1/delete-chat` | Delete a chat (soft-delete local data) |
 | POST | `/api/v1/set-handle` | Switch active outgoing handle |
+| POST | `/api/v1/reconnect` | Reconnect iMessage session |
 | GET | `/api/v1/login/flows` | List login flows |
 | POST | `/api/v1/login/start` | Start login session |
 | POST | `/api/v1/login/step` | Submit login step input |

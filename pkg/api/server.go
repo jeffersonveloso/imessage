@@ -54,6 +54,7 @@ func New(cfg Config, provider IMClientProvider, loginProvider LoginProvider, log
 	mux.HandleFunc("GET /api/v1/handles", s.handleHandles)
 	mux.HandleFunc("POST /api/v1/validate", s.handleValidate)
 	mux.HandleFunc("GET /api/v1/chat", s.handleChatInfo)
+	mux.HandleFunc("GET /api/v1/chats", s.handleChats)
 	mux.HandleFunc("GET /api/v1/contact", s.handleContact)
 
 	// Send
@@ -74,6 +75,7 @@ func New(cfg Config, provider IMClientProvider, loginProvider LoginProvider, log
 	mux.HandleFunc("POST /api/v1/login/step", s.handleLoginStep)
 
 	// Session
+	mux.HandleFunc("POST /api/v1/reconnect", s.handleReconnect)
 	mux.HandleFunc("POST /api/v1/logout", s.handleLogout)
 
 	// Top-level mux: docs served without auth, everything else requires auth.
