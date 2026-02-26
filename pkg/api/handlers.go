@@ -18,13 +18,24 @@ import (
 
 const maxMediaSize = 100 << 20 // 100 MB
 
-// buildConversation normalizes the recipient and builds a WrappedConversation for DMs.
-func (s *Server) buildConversation(client IMClient, to string, isSMS bool) rustpushgo.WrappedConversation {
+// buildConversationFromRequest validates the target fields and builds a WrappedConversation.
+// Exactly one of 'to' (DM) or 'participants' (group) must be provided.
+func (s *Server) buildConversationFromRequest(client IMClient, to string, participants []string, groupName *string, isSMS bool) (rustpushgo.WrappedConversation, error) {
+	hasDM := to != ""
+	hasGroup := len(participants) > 0
+	if hasDM == hasGroup {
+		return rustpushgo.WrappedConversation{}, fmt.Errorf("provide either 'to' (DM) or 'participants' (group), not both")
+	}
+	if hasGroup {
+		conv := client.BuildGroupConversation(participants, groupName)
+		conv.IsSms = isSMS
+		return conv, nil
+	}
 	normalized := client.NormalizeIdentifier(to)
 	return rustpushgo.WrappedConversation{
 		Participants: []string{client.Handle(), normalized},
 		IsSms:        isSMS,
-	}
+	}, nil
 }
 
 // reactionNameToCode maps API reaction names to rustpush tapback codes.
@@ -119,8 +130,8 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" || req.Text == "" {
-		writeError(w, http.StatusBadRequest, "to and text are required", "INVALID_REQUEST")
+	if req.Text == "" {
+		writeError(w, http.StatusBadRequest, "text is required", "INVALID_REQUEST")
 		return
 	}
 
@@ -130,7 +141,11 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	uuid, err := client.SendMessage(conv, req.Text, client.Handle(), req.ReplyTo, req.ReplyPart, req.EffectID, req.Subject)
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Msg("Failed to send message")
@@ -196,8 +211,8 @@ func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.To == "" || req.MimeType == "" || req.Filename == "" {
-		writeError(w, http.StatusBadRequest, "to, mime_type, and filename are required", "INVALID_REQUEST")
+	if req.MimeType == "" || req.Filename == "" {
+		writeError(w, http.StatusBadRequest, "mime_type and filename are required", "INVALID_REQUEST")
 		return
 	}
 
@@ -207,7 +222,11 @@ func (s *Server) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	uti := client.MimeToUTI(req.MimeType)
 	uuid, err := client.SendAttachment(conv, data, req.MimeType, uti, req.Filename, client.Handle(), req.ReplyTo, req.ReplyPart, req.EffectID, req.Subject, req.Caption)
 	if err != nil {
@@ -245,6 +264,12 @@ func parseMultipartMedia(r *http.Request) ([]byte, SendMediaRequest, error) {
 		MimeType: r.FormValue("mime_type"),
 		Filename: r.FormValue("filename"),
 		IsSMS:    r.FormValue("is_sms") == "true",
+	}
+	if v := r.FormValue("participants"); v != "" {
+		req.Participants = strings.Split(v, ",")
+	}
+	if v := r.FormValue("group_name"); v != "" {
+		req.GroupName = &v
 	}
 
 	// Auto-detect mime type from the file header if not provided
@@ -344,8 +369,8 @@ func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" || req.TargetUUID == "" || req.Reaction == "" {
-		writeError(w, http.StatusBadRequest, "to, target_uuid, and reaction are required", "INVALID_REQUEST")
+	if req.TargetUUID == "" || req.Reaction == "" {
+		writeError(w, http.StatusBadRequest, "target_uuid and reaction are required", "INVALID_REQUEST")
 		return
 	}
 
@@ -374,7 +399,11 @@ func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	uuid, err := client.SendTapback(conv, req.TargetUUID, req.TargetPart, reactionCode, emoji, req.Remove, client.Handle())
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Str("target", req.TargetUUID).Msg("Failed to send reaction")
@@ -391,8 +420,8 @@ func (s *Server) handleEdit(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" || req.TargetUUID == "" || req.NewText == "" {
-		writeError(w, http.StatusBadRequest, "to, target_uuid, and new_text are required", "INVALID_REQUEST")
+	if req.TargetUUID == "" || req.NewText == "" {
+		writeError(w, http.StatusBadRequest, "target_uuid and new_text are required", "INVALID_REQUEST")
 		return
 	}
 
@@ -402,7 +431,11 @@ func (s *Server) handleEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	uuid, err := client.SendEdit(conv, req.TargetUUID, 0, req.NewText, client.Handle())
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Str("target", req.TargetUUID).Msg("Failed to send edit")
@@ -419,8 +452,8 @@ func (s *Server) handleUnsend(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" || req.TargetUUID == "" {
-		writeError(w, http.StatusBadRequest, "to and target_uuid are required", "INVALID_REQUEST")
+	if req.TargetUUID == "" {
+		writeError(w, http.StatusBadRequest, "target_uuid is required", "INVALID_REQUEST")
 		return
 	}
 
@@ -430,7 +463,11 @@ func (s *Server) handleUnsend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	uuid, err := client.SendUnsend(conv, req.TargetUUID, 0, client.Handle())
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Str("target", req.TargetUUID).Msg("Failed to send unsend")
@@ -447,10 +484,6 @@ func (s *Server) handleTyping(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" {
-		writeError(w, http.StatusBadRequest, "to is required", "INVALID_REQUEST")
-		return
-	}
 
 	client, err := s.provider.GetActiveClient()
 	if err != nil {
@@ -458,7 +491,11 @@ func (s *Server) handleTyping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	err = client.SendTyping(conv, req.Typing, client.Handle())
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Msg("Failed to send typing indicator")
@@ -474,10 +511,6 @@ func (s *Server) handleReadReceipt(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.To == "" {
-		writeError(w, http.StatusBadRequest, "to is required", "INVALID_REQUEST")
-		return
-	}
 
 	client, err := s.provider.GetActiveClient()
 	if err != nil {
@@ -485,7 +518,11 @@ func (s *Server) handleReadReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv := s.buildConversation(client, req.To, req.IsSMS)
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
 	err = client.SendReadReceipt(conv, client.Handle(), req.ForUUID)
 	if err != nil {
 		s.log.Err(err).Str("to", req.To).Msg("Failed to send read receipt")
@@ -508,6 +545,77 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info().Str("handle", handle).Msg("Client disconnected via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
+}
+
+func (s *Server) handleChatInfo(w http.ResponseWriter, r *http.Request) {
+	participantsParam := r.URL.Query().Get("participants")
+	if participantsParam == "" {
+		writeError(w, http.StatusBadRequest, "participants query parameter is required", "INVALID_REQUEST")
+		return
+	}
+	participants := strings.Split(participantsParam, ",")
+
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	info, err := client.GetChatInfo(participants)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get chat info: %v", err), "LOOKUP_FAILED")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) handleContact(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id query parameter is required", "INVALID_REQUEST")
+		return
+	}
+
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	contact, err := client.GetContact(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get contact: %v", err), "LOOKUP_FAILED")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, contact)
+}
+
+func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
+	var req DeleteChatRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Participants) == 0 {
+		writeError(w, http.StatusBadRequest, "participants is required", "INVALID_REQUEST")
+		return
+	}
+
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	err = client.DeleteChat(req.Participants, req.GroupName)
+	if err != nil {
+		s.log.Err(err).Msg("Failed to delete chat")
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to delete chat: %v", err), "DELETE_FAILED")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, OkResponse{Status: "deleted"})
 }
 
 // --- JSON helpers ---

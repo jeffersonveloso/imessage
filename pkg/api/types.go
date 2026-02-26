@@ -3,62 +3,76 @@ package api
 // --- HTTP Request types ---
 
 type SendRequest struct {
-	To        string  `json:"to"`
-	Text      string  `json:"text"`
-	IsSMS     bool    `json:"is_sms,omitempty"`
-	ReplyTo   *string `json:"reply_to,omitempty"`
-	ReplyPart *string `json:"reply_part,omitempty"`
-	EffectID  *string `json:"effect_id,omitempty"`
-	Subject   *string `json:"subject,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	Text         string   `json:"text"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
+	ReplyTo      *string  `json:"reply_to,omitempty"`
+	ReplyPart    *string  `json:"reply_part,omitempty"`
+	EffectID     *string  `json:"effect_id,omitempty"`
+	Subject      *string  `json:"subject,omitempty"`
 }
 
 type SendMediaRequest struct {
-	To        string  `json:"to"`
-	Data      string  `json:"data,omitempty"`      // base64-encoded (optional if url is set)
-	URL       string  `json:"url,omitempty"`        // fetch file from this URL
-	MimeType  string  `json:"mime_type,omitempty"`  // auto-detected from URL if omitted
-	Filename  string  `json:"filename,omitempty"`   // auto-detected from URL if omitted
-	IsSMS     bool    `json:"is_sms,omitempty"`
-	ReplyTo   *string `json:"reply_to,omitempty"`
-	ReplyPart *string `json:"reply_part,omitempty"`
-	EffectID  *string `json:"effect_id,omitempty"`
-	Subject   *string `json:"subject,omitempty"`
-	Caption   *string `json:"caption,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	Data         string   `json:"data,omitempty"`      // base64-encoded (optional if url is set)
+	URL          string   `json:"url,omitempty"`        // fetch file from this URL
+	MimeType     string   `json:"mime_type,omitempty"`  // auto-detected from URL if omitted
+	Filename     string   `json:"filename,omitempty"`   // auto-detected from URL if omitted
+	IsSMS        bool     `json:"is_sms,omitempty"`
+	ReplyTo      *string  `json:"reply_to,omitempty"`
+	ReplyPart    *string  `json:"reply_part,omitempty"`
+	EffectID     *string  `json:"effect_id,omitempty"`
+	Subject      *string  `json:"subject,omitempty"`
+	Caption      *string  `json:"caption,omitempty"`
 }
 
 type ReactRequest struct {
-	To         string  `json:"to"`
-	TargetUUID string  `json:"target_uuid"`
-	TargetPart uint64  `json:"target_part"`
-	Reaction   string  `json:"reaction"` // heart, like, dislike, laugh, emphasize, question, emoji
-	Emoji      *string `json:"emoji,omitempty"`
-	Remove     bool    `json:"remove,omitempty"`
-	IsSMS      bool    `json:"is_sms,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	TargetUUID   string   `json:"target_uuid"`
+	TargetPart   uint64   `json:"target_part"`
+	Reaction     string   `json:"reaction"` // heart, like, dislike, laugh, emphasize, question, emoji
+	Emoji        *string  `json:"emoji,omitempty"`
+	Remove       bool     `json:"remove,omitempty"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
 type EditRequest struct {
-	To         string `json:"to"`
-	TargetUUID string `json:"target_uuid"`
-	NewText    string `json:"new_text"`
-	IsSMS      bool   `json:"is_sms,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	TargetUUID   string   `json:"target_uuid"`
+	NewText      string   `json:"new_text"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
 type UnsendRequest struct {
-	To         string `json:"to"`
-	TargetUUID string `json:"target_uuid"`
-	IsSMS      bool   `json:"is_sms,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	TargetUUID   string   `json:"target_uuid"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
 type TypingRequest struct {
-	To     string `json:"to"`
-	Typing bool   `json:"typing"`
-	IsSMS  bool   `json:"is_sms,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	Typing       bool     `json:"typing"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
 type ReadReceiptRequest struct {
-	To      string  `json:"to"`
-	ForUUID *string `json:"for_uuid,omitempty"`
-	IsSMS   bool    `json:"is_sms,omitempty"`
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	ForUUID      *string  `json:"for_uuid,omitempty"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
 type ValidateRequest struct {
@@ -147,16 +161,17 @@ const (
 )
 
 type WebhookMessageData struct {
-	UUID          string   `json:"uuid"`
-	Sender        string   `json:"sender"`
-	Text          *string  `json:"text,omitempty"`
-	Subject       *string  `json:"subject,omitempty"`
-	Participants  []string `json:"participants"`
-	GroupName     *string  `json:"group_name,omitempty"`
-	IsGroup       bool     `json:"is_group"`
-	IsSMS         bool     `json:"is_sms"`
-	ReplyTo       *string  `json:"reply_to,omitempty"`
-	HasAttachment bool     `json:"has_attachment"`
+	UUID          string              `json:"uuid"`
+	Sender        string              `json:"sender"`
+	Text          *string             `json:"text,omitempty"`
+	Subject       *string             `json:"subject,omitempty"`
+	Participants  []string            `json:"participants"`
+	GroupName     *string             `json:"group_name,omitempty"`
+	IsGroup       bool                `json:"is_group"`
+	IsSMS         bool                `json:"is_sms"`
+	ReplyTo       *string             `json:"reply_to,omitempty"`
+	HasAttachment bool                `json:"has_attachment"`
+	Attachments   []WebhookAttachment `json:"attachments,omitempty"`
 }
 
 type WebhookReactionData struct {
@@ -222,4 +237,66 @@ type WebhookUnsendData struct {
 type WebhookConnectionData struct {
 	Handle     string   `json:"handle"`
 	AllHandles []string `json:"all_handles"`
+}
+
+// --- Feature 2: Attachment data in webhooks ---
+
+type WebhookAttachment struct {
+	MimeType string  `json:"mime_type"`
+	Filename string  `json:"filename"`
+	Size     uint64  `json:"size"`
+	Data     *string `json:"data,omitempty"` // base64-encoded, nil if unavailable
+}
+
+// --- Feature 3: Group event webhooks ---
+
+const WebhookCategoryGroupUpdate = "group_update"
+
+type WebhookRenameData struct {
+	Sender       string   `json:"sender"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	NewName      string   `json:"new_name"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
+}
+
+type WebhookParticipantChangeData struct {
+	Sender          string   `json:"sender"`
+	Participants    []string `json:"participants"`
+	NewParticipants []string `json:"new_participants"`
+	GroupName       *string  `json:"group_name,omitempty"`
+	IsGroup         bool     `json:"is_group"`
+	IsSMS           bool     `json:"is_sms"`
+}
+
+type WebhookIconChangeData struct {
+	Sender       string   `json:"sender"`
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	PhotoCleared bool     `json:"photo_cleared"`
+	IsGroup      bool     `json:"is_group"`
+	IsSMS        bool     `json:"is_sms"`
+}
+
+// --- Feature 4: Chat info & contact lookup ---
+
+type ChatInfoResponse struct {
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsGroup      bool     `json:"is_group"`
+}
+
+type ContactResponse struct {
+	Identifier  string   `json:"identifier"`
+	DisplayName string   `json:"display_name"`
+	Phones      []string `json:"phones,omitempty"`
+	Emails      []string `json:"emails,omitempty"`
+}
+
+// --- Feature 5: Delete chat ---
+
+type DeleteChatRequest struct {
+	Participants []string `json:"participants"`
+	GroupName    *string  `json:"group_name,omitempty"`
 }

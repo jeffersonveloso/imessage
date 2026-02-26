@@ -1,6 +1,11 @@
 package connector
 
 import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/lrhodin/imessage/pkg/api"
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
@@ -52,4 +57,188 @@ func (a *imClientAdapter) SendReadReceipt(conv rustpushgo.WrappedConversation, h
 
 func (a *imClientAdapter) ValidateTargets(targets []string, handle string) []string {
 	return a.client.client.ValidateTargets(targets, handle)
+}
+
+func (a *imClientAdapter) BuildGroupConversation(participants []string, groupName *string) rustpushgo.WrappedConversation {
+	// Normalize and sort participants to compute portal ID (same as makePortalKey group branch).
+	sorted := make([]string, 0, len(participants))
+	for _, p := range participants {
+		normalized := normalizeIdentifierForPortalID(p)
+		if normalized == "" || a.client.isMyHandle(normalized) {
+			continue
+		}
+		sorted = append(sorted, normalized)
+	}
+	sorted = append(sorted, normalizeIdentifierForPortalID(a.client.handle))
+	sort.Strings(sorted)
+	deduped := sorted[:0]
+	for i, s := range sorted {
+		if i == 0 || s != sorted[i-1] {
+			deduped = append(deduped, s)
+		}
+	}
+	portalID := strings.Join(deduped, ",")
+
+	// Look up the persistent group UUID (sender_guid) so outbound messages
+	// route to the correct iMessage group thread.
+	var senderGuid *string
+	a.client.imGroupGuidsMu.RLock()
+	if guid, ok := a.client.imGroupGuids[portalID]; ok {
+		senderGuid = &guid
+	}
+	a.client.imGroupGuidsMu.RUnlock()
+
+	// Also check gid:-prefixed portal IDs.
+	if senderGuid == nil {
+		a.client.imGroupGuidsMu.RLock()
+		for pid, guid := range a.client.imGroupGuids {
+			if strings.HasPrefix(pid, "gid:") {
+				// Check if the participants match by looking up cached participants.
+				a.client.imGroupParticipantsMu.RLock()
+				cachedParts := a.client.imGroupParticipants[pid]
+				a.client.imGroupParticipantsMu.RUnlock()
+				if participantsMatchPortalID(cachedParts, portalID) {
+					senderGuid = &guid
+					break
+				}
+			}
+		}
+		a.client.imGroupGuidsMu.RUnlock()
+	}
+
+	return rustpushgo.WrappedConversation{
+		Participants: deduped,
+		GroupName:    groupName,
+		SenderGuid:  senderGuid,
+	}
+}
+
+// participantsMatchPortalID checks if cached participants form the same portal ID.
+func participantsMatchPortalID(cached []string, portalID string) bool {
+	if len(cached) == 0 {
+		return false
+	}
+	sorted := make([]string, len(cached))
+	copy(sorted, cached)
+	sort.Strings(sorted)
+	deduped := sorted[:0]
+	for i, s := range sorted {
+		if i == 0 || s != sorted[i-1] {
+			deduped = append(deduped, s)
+		}
+	}
+	return strings.Join(deduped, ",") == portalID
+}
+
+func (a *imClientAdapter) GetChatInfo(participants []string) (*api.ChatInfoResponse, error) {
+	// Normalize participants to compute portal ID.
+	sorted := make([]string, 0, len(participants))
+	for _, p := range participants {
+		normalized := normalizeIdentifierForPortalID(p)
+		if normalized != "" {
+			sorted = append(sorted, normalized)
+		}
+	}
+	sort.Strings(sorted)
+	deduped := sorted[:0]
+	for i, s := range sorted {
+		if i == 0 || s != sorted[i-1] {
+			deduped = append(deduped, s)
+		}
+	}
+	portalID := strings.Join(deduped, ",")
+	isGroup := len(deduped) > 2
+
+	// Look up cached group name.
+	var groupName *string
+	a.client.imGroupNamesMu.RLock()
+	if name, ok := a.client.imGroupNames[portalID]; ok {
+		groupName = &name
+	}
+	a.client.imGroupNamesMu.RUnlock()
+
+	// Also check gid:-prefixed portal IDs for group name.
+	if groupName == nil {
+		a.client.imGroupNamesMu.RLock()
+		for pid, name := range a.client.imGroupNames {
+			if strings.HasPrefix(pid, "gid:") {
+				a.client.imGroupParticipantsMu.RLock()
+				cachedParts := a.client.imGroupParticipants[pid]
+				a.client.imGroupParticipantsMu.RUnlock()
+				if participantsMatchPortalID(cachedParts, portalID) {
+					nameCopy := name
+					groupName = &nameCopy
+					break
+				}
+			}
+		}
+		a.client.imGroupNamesMu.RUnlock()
+	}
+
+	// Look up cached participants (may have more members than the query).
+	fullParticipants := deduped
+	a.client.imGroupParticipantsMu.RLock()
+	if cached, ok := a.client.imGroupParticipants[portalID]; ok && len(cached) > 0 {
+		fullParticipants = cached
+	}
+	a.client.imGroupParticipantsMu.RUnlock()
+
+	return &api.ChatInfoResponse{
+		Participants: fullParticipants,
+		GroupName:    groupName,
+		IsGroup:      isGroup,
+	}, nil
+}
+
+func (a *imClientAdapter) GetContact(identifier string) (*api.ContactResponse, error) {
+	normalized := normalizeIdentifierForPortalID(identifier)
+	if normalized == "" {
+		return nil, fmt.Errorf("invalid identifier")
+	}
+
+	displayName := a.client.resolveContactDisplayname(normalized)
+
+	resp := &api.ContactResponse{
+		Identifier:  normalized,
+		DisplayName: displayName,
+	}
+
+	// If contacts are available, enrich with phone/email info.
+	if a.client.contacts != nil {
+		localID := stripIdentifierPrefix(normalized)
+		if contact, _ := a.client.contacts.GetContactInfo(localID); contact != nil {
+			resp.Phones = contact.Phones
+			resp.Emails = contact.Emails
+		}
+	}
+
+	return resp, nil
+}
+
+func (a *imClientAdapter) DeleteChat(participants []string, groupName *string) error {
+	if a.client.cloudStore == nil {
+		return fmt.Errorf("cloud store not available")
+	}
+
+	// Normalize participants to compute portal ID (same as makePortalKey).
+	sorted := make([]string, 0, len(participants))
+	for _, p := range participants {
+		normalized := normalizeIdentifierForPortalID(p)
+		if normalized == "" || a.client.isMyHandle(normalized) {
+			continue
+		}
+		sorted = append(sorted, normalized)
+	}
+	sorted = append(sorted, normalizeIdentifierForPortalID(a.client.handle))
+	sort.Strings(sorted)
+	deduped := sorted[:0]
+	for i, s := range sorted {
+		if i == 0 || s != sorted[i-1] {
+			deduped = append(deduped, s)
+		}
+	}
+	portalID := strings.Join(deduped, ",")
+
+	ctx := context.Background()
+	return a.client.cloudStore.deleteLocalChatByPortalID(ctx, portalID)
 }

@@ -961,14 +961,72 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 			IsGroup:      isGroup,
 			IsSMS:        msg.IsSms,
 		}
+	case msg.IsRename:
+		eventType = "rename"
+		category = api.WebhookCategoryGroupUpdate
+		newName := ""
+		if msg.NewChatName != nil {
+			newName = *msg.NewChatName
+		}
+		data = api.WebhookRenameData{
+			Sender:       sender,
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			NewName:      newName,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
+		}
+	case msg.IsParticipantChange:
+		eventType = "participant_change"
+		category = api.WebhookCategoryGroupUpdate
+		data = api.WebhookParticipantChangeData{
+			Sender:          sender,
+			Participants:    msg.Participants,
+			NewParticipants: msg.NewParticipants,
+			GroupName:       msg.GroupName,
+			IsGroup:         isGroup,
+			IsSMS:           msg.IsSms,
+		}
+	case msg.IsIconChange:
+		eventType = "icon_change"
+		category = api.WebhookCategoryGroupUpdate
+		data = api.WebhookIconChangeData{
+			Sender:       sender,
+			Participants: msg.Participants,
+			GroupName:    msg.GroupName,
+			PhotoCleared: msg.GroupPhotoCleared,
+			IsGroup:      isGroup,
+			IsSMS:        msg.IsSms,
+		}
 	case msg.IsError, msg.IsPeerCacheInvalidate, msg.IsMoveToRecycleBin,
-		msg.IsPermanentDelete, msg.IsRename, msg.IsParticipantChange, msg.IsIconChange:
+		msg.IsPermanentDelete:
 		// Internal/control events — not dispatched via webhook.
 		return
 	default:
 		// Regular message
 		eventType = "message"
 		category = api.WebhookCategoryMessage
+
+		// Build attachment metadata for the webhook payload.
+		var attachments []api.WebhookAttachment
+		for i := range msg.Attachments {
+			att := &msg.Attachments[i]
+			// Skip rich-link sideband attachments.
+			if strings.HasPrefix(att.MimeType, "x-richlink/") {
+				continue
+			}
+			wa := api.WebhookAttachment{
+				MimeType: att.MimeType,
+				Filename: att.Filename,
+				Size:     att.Size,
+			}
+			if att.IsInline && att.InlineData != nil {
+				encoded := base64.StdEncoding.EncodeToString(*att.InlineData)
+				wa.Data = &encoded
+			}
+			attachments = append(attachments, wa)
+		}
+
 		data = api.WebhookMessageData{
 			UUID:          msg.Uuid,
 			Sender:        sender,
@@ -980,6 +1038,7 @@ func (c *IMClient) dispatchWebhookEvent(msg rustpushgo.WrappedMessage) {
 			IsSMS:         msg.IsSms,
 			ReplyTo:       msg.ReplyGuid,
 			HasAttachment: len(msg.Attachments) > 0,
+			Attachments:   attachments,
 		}
 	}
 

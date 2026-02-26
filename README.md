@@ -45,8 +45,9 @@ make install-api
 The installer configures the HTTP API (listen address, API key, webhooks), handles iMessage login via CLI, and starts the service as a LaunchAgent. Once running:
 
 - **Swagger docs**: http://localhost:8080/api/v1/docs
-- **Send messages**: `POST /api/v1/send`
-- **Receive events**: configure a webhook URL during setup
+- **Send messages**: `POST /api/v1/send` (DM and group)
+- **Receive events**: configure a webhook URL during setup (messages, reactions, group updates)
+- **Query**: `GET /api/v1/chat` (chat info) and `GET /api/v1/contact` (contact lookup)
 - **Login via API**: `POST /api/v1/login/start` + `POST /api/v1/login/step`
 
 See [HTTP REST API](#http-rest-api) for full details.
@@ -372,9 +373,14 @@ Login sessions expire after 10 minutes of inactivity.
 ### Sending Messages
 
 ```bash
-# Send text
+# Send text (DM)
 curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
   -d '{"to":"tel:+15551234567","text":"Hello!"}' \
+  http://localhost:8080/api/v1/send
+
+# Send text (group) — use participants instead of to
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"participants":["tel:+15551234567","tel:+15559876543","tel:+15550001111"],"text":"Hello group!"}' \
   http://localhost:8080/api/v1/send
 
 # Send media (base64-encoded)
@@ -391,23 +397,39 @@ curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json
 curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
   -d '{"targets":["tel:+15551234567","mailto:user@example.com"]}' \
   http://localhost:8080/api/v1/validate
+
+# Look up chat info
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/v1/chat?participants=tel:+15551234567,tel:+15559876543"
+
+# Look up contact
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/v1/contact?id=tel:+15551234567"
+
+# Delete chat
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"participants":["tel:+15551234567","tel:+15559876543"]}' \
+  http://localhost:8080/api/v1/delete-chat
 ```
 
 ### Webhooks
 
 When `webhook_url` is configured, the API POSTs JSON events for incoming messages and status changes:
 
-| Event | Description |
-|-------|-------------|
-| `message` | New incoming message (text, attachments) |
-| `reaction` | Tapback/reaction received |
-| `typing` | Typing indicator |
-| `read_receipt` | Message read by recipient |
-| `delivered` | Message delivered to recipient |
-| `edit` | Message edited |
-| `unsend` | Message unsent |
-| `connected` | iMessage session connected |
-| `disconnected` | iMessage session disconnected |
+| Event | Category | Description |
+|-------|----------|-------------|
+| `message` | `message` | New incoming message (text, attachments with base64 data) |
+| `reaction` | `message_update` | Tapback/reaction received |
+| `edit` | `message_update` | Message edited |
+| `unsend` | `message_update` | Message unsent |
+| `typing` | `message_receipt` | Typing indicator |
+| `read_receipt` | `message_receipt` | Message read by recipient |
+| `delivered` | `message_receipt` | Message delivered to recipient |
+| `rename` | `group_update` | Group chat renamed |
+| `participant_change` | `group_update` | Group members added/removed |
+| `icon_change` | `group_update` | Group photo changed/cleared |
+| `connected` | `connection` | iMessage session connected |
+| `disconnected` | `connection` | iMessage session disconnected |
 
 Each request includes:
 - `X-Webhook-Event` header with the event type
@@ -421,13 +443,16 @@ Each request includes:
 | GET | `/api/v1/status` | Connection status |
 | GET | `/api/v1/handles` | List registered handles |
 | POST | `/api/v1/validate` | Check if targets are on iMessage |
-| POST | `/api/v1/send` | Send text message |
-| POST | `/api/v1/send-media` | Send media attachment |
+| GET | `/api/v1/chat` | Get chat info (participants, group name) |
+| GET | `/api/v1/contact` | Look up contact display name and details |
+| POST | `/api/v1/send` | Send text message (DM or group) |
+| POST | `/api/v1/send-media` | Send media attachment (DM or group) |
 | POST | `/api/v1/react` | Send reaction/tapback |
 | POST | `/api/v1/edit` | Edit a sent message |
 | POST | `/api/v1/unsend` | Unsend a message |
 | POST | `/api/v1/typing` | Send typing indicator |
 | POST | `/api/v1/read-receipt` | Send read receipt |
+| POST | `/api/v1/delete-chat` | Delete a chat (soft-delete local data) |
 | GET | `/api/v1/login/flows` | List login flows |
 | POST | `/api/v1/login/start` | Start login session |
 | POST | `/api/v1/login/step` | Submit login step input |
