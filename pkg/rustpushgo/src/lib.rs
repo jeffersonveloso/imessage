@@ -5460,7 +5460,8 @@ impl LoginSession {
 
         // SMS (secondaryAuth) accounts must verify via verify_sms_2fa with the body
         // captured at login_start; trusted-device accounts use verify_2fa.
-        let sms_body = self.sms_verify_body.lock().unwrap().take();
+        // Clone rather than consume it so a mistyped code can be retried.
+        let sms_body = self.sms_verify_body.lock().unwrap().clone();
         let result = if let Some(body) = sms_body {
             info!("Verifying 2FA code via SMS securitycode endpoint (verify_sms_2fa)");
             account.verify_sms_2fa(code, body).await
@@ -5471,8 +5472,8 @@ impl LoginSession {
                 .map_err(|e| WrappedError::GenericError { msg: format!("2FA verification failed: {}", e) })?
         };
 
-        info!("[DEBUG-LOGIN] 2FA verification returned: {:?}", result);
-        info!("[DEBUG-LOGIN] PET token available: {}", account.get_pet().is_some());
+        info!("2FA verification returned: {:?}", result);
+        info!("PET token available: {}", account.get_pet().is_some());
 
         // verify_2fa returns NeedsLogin when Apple accepted the code (ec=0) but the
         // /validate response carried no X-Apple-PE-Token header — the normal
@@ -5481,8 +5482,13 @@ impl LoginSession {
         // on NeedsLogin). The hand-rolled flow was mapping NeedsLogin -> Ok(false),
         // surfacing as "2FA verification failed — invalid code" on a perfectly valid code.
         match result {
-            icloud_auth::LoginState::LoggedIn => Ok(true),
+            icloud_auth::LoginState::LoggedIn => {
+                // Success — clear the SMS body since it's no longer needed
+                *self.sms_verify_body.lock().unwrap() = None;
+                Ok(true)
+            }
             icloud_auth::LoginState::NeedsExtraStep(_) => {
+                *self.sms_verify_body.lock().unwrap() = None;
                 Ok(account.get_pet().is_some())
             }
             icloud_auth::LoginState::NeedsLogin => {
@@ -5495,7 +5501,11 @@ impl LoginSession {
                 let relogin = account.login_email_pass(&username, &hashed).await
                     .map_err(|e| WrappedError::GenericError { msg: format!("Post-2FA re-login failed: {}", e) })?;
                 info!("Post-2FA re-login returned: {:?}; PET available: {}", relogin, account.get_pet().is_some());
-                Ok(matches!(relogin, icloud_auth::LoginState::LoggedIn) || account.get_pet().is_some())
+                let complete = matches!(relogin, icloud_auth::LoginState::LoggedIn) || account.get_pet().is_some();
+                if complete {
+                    *self.sms_verify_body.lock().unwrap() = None;
+                }
+                Ok(complete)
             }
             _ => Ok(false),
         }
