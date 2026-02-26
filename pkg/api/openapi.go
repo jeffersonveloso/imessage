@@ -48,7 +48,10 @@ const openapiSpec = `{
         "properties": {
           "connected": { "type": "boolean" },
           "handle": { "type": "string", "example": "tel:+15551234567" },
-          "all_handles": { "type": "array", "items": { "type": "string" } }
+          "all_handles": { "type": "array", "items": { "type": "string" } },
+          "contacts_count": { "type": "integer", "description": "Number of loaded contacts (null if contacts not available)" },
+          "contacts_ready": { "type": "boolean", "description": "Whether contacts have finished loading" },
+          "cloud_sync_done": { "type": "boolean", "description": "Whether CloudKit initial sync has completed" }
         },
         "required": ["connected"]
       },
@@ -176,6 +179,23 @@ const openapiSpec = `{
           "for_uuid": { "type": "string", "description": "UUID of specific message to mark as read" },
           "is_sms": { "type": "boolean", "default": false }
         }
+      },
+      "DeliveryReceiptRequest": {
+        "type": "object",
+        "description": "Provide either 'to' for DM or 'participants' for group, not both.",
+        "properties": {
+          "to": { "type": "string", "description": "Recipient identifier for DM" },
+          "participants": { "type": "array", "items": { "type": "string" }, "description": "Group members including self" },
+          "group_name": { "type": "string", "description": "iMessage cv_name for group routing" },
+          "is_sms": { "type": "boolean", "default": false }
+        }
+      },
+      "SetHandleRequest": {
+        "type": "object",
+        "properties": {
+          "handle": { "type": "string", "description": "Handle to switch to (must be in all_handles)", "example": "tel:+15551234567" }
+        },
+        "required": ["handle"]
       },
       "DeleteChatRequest": {
         "type": "object",
@@ -325,7 +345,7 @@ const openapiSpec = `{
       "get": {
         "tags": ["Query"],
         "summary": "Connection status",
-        "description": "Returns whether an iMessage session is active and the connected handles.",
+        "description": "Returns whether an iMessage session is active, the connected handles, and sync status (contacts_count, contacts_ready, cloud_sync_done).",
         "responses": {
           "200": { "description": "Status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatusResponse" } } } },
           "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
@@ -424,6 +444,31 @@ const openapiSpec = `{
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReadReceiptRequest" } } } },
         "responses": {
           "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } }
+        }
+      }
+    },
+    "/api/v1/delivery-receipt": {
+      "post": {
+        "tags": ["Send"],
+        "summary": "Send delivery receipt",
+        "description": "Sends a delivery receipt to indicate the message was received by this device.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeliveryReceiptRequest" } } } },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },
+          "503": { "description": "Not connected" }
+        }
+      }
+    },
+    "/api/v1/set-handle": {
+      "post": {
+        "tags": ["Session"],
+        "summary": "Switch active handle",
+        "description": "Switches the active outgoing handle (phone number or email). The handle must be one of the handles listed in all_handles from the status endpoint.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SetHandleRequest" } } } },
+        "responses": {
+          "200": { "description": "Handle switched", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OkResponse" } } } },
+          "400": { "description": "Invalid handle", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "503": { "description": "Not connected" }
         }
       }
     },

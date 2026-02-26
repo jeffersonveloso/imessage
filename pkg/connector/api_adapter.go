@@ -243,6 +243,56 @@ func (a *imClientAdapter) DeleteChat(participants []string, groupName *string) e
 	return a.client.cloudStore.deleteLocalChatByPortalID(ctx, portalID)
 }
 
+func (a *imClientAdapter) SendDeliveryReceipt(conv rustpushgo.WrappedConversation, handle string) error {
+	return a.client.client.SendDeliveryReceipt(conv, handle)
+}
+
+func (a *imClientAdapter) SetHandle(handle string) error {
+	// Validate the handle is in the list of available handles.
+	found := false
+	for _, h := range a.client.allHandles {
+		if h == handle {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("handle %q not found in available handles", handle)
+	}
+
+	a.client.handle = handle
+
+	// Persist to metadata.
+	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
+	if !ok {
+		return fmt.Errorf("unexpected metadata type")
+	}
+	meta.PreferredHandle = handle
+	if err := a.client.UserLogin.Save(context.Background()); err != nil {
+		return fmt.Errorf("failed to persist metadata: %w", err)
+	}
+	return nil
+}
+
+func (a *imClientAdapter) GetStatusInfo() (contactsCount *int, contactsReady *bool, cloudSyncDone *bool) {
+	if a.client.contacts != nil {
+		count := len(a.client.contacts.GetAllContacts())
+		contactsCount = &count
+	}
+
+	a.client.contactsReadyLock.RLock()
+	ready := a.client.contactsReady
+	a.client.contactsReadyLock.RUnlock()
+	contactsReady = &ready
+
+	a.client.cloudSyncDoneLock.RLock()
+	syncDone := a.client.cloudSyncDone
+	a.client.cloudSyncDoneLock.RUnlock()
+	cloudSyncDone = &syncDone
+
+	return
+}
+
 func (a *imClientAdapter) ClearInstanceID() error {
 	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
 	if !ok {

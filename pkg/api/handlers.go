@@ -66,10 +66,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, StatusResponse{Connected: false})
 		return
 	}
+	contactsCount, contactsReady, cloudSyncDone := client.GetStatusInfo()
 	writeJSON(w, http.StatusOK, StatusResponse{
-		Connected:  true,
-		Handle:     client.Handle(),
-		AllHandles: client.AllHandles(),
+		Connected:     true,
+		Handle:        client.Handle(),
+		AllHandles:    client.AllHandles(),
+		ContactsCount: contactsCount,
+		ContactsReady: contactsReady,
+		CloudSyncDone: cloudSyncDone,
 	})
 }
 
@@ -530,6 +534,58 @@ func (s *Server) handleReadReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
+}
+
+func (s *Server) handleDeliveryReceipt(w http.ResponseWriter, r *http.Request) {
+	var req DeliveryReceiptRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	conv, err := s.buildConversationFromRequest(client, req.To, req.Participants, req.GroupName, req.IsSMS)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
+	err = client.SendDeliveryReceipt(conv, client.Handle())
+	if err != nil {
+		s.log.Err(err).Str("to", req.To).Msg("Failed to send delivery receipt")
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to send delivery receipt: %v", err), "SEND_FAILED")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
+}
+
+func (s *Server) handleSetHandle(w http.ResponseWriter, r *http.Request) {
+	var req SetHandleRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Handle == "" {
+		writeError(w, http.StatusBadRequest, "handle is required", "INVALID_REQUEST")
+		return
+	}
+
+	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error(), "NOT_CONNECTED")
+		return
+	}
+
+	if err := client.SetHandle(req.Handle); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), "INVALID_REQUEST")
+		return
+	}
+
+	s.log.Info().Str("handle", req.Handle).Msg("Active handle switched via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "ok"})
 }
 

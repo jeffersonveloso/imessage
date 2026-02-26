@@ -75,6 +75,17 @@ type ReadReceiptRequest struct {
 	IsSMS        bool     `json:"is_sms,omitempty"`
 }
 
+type DeliveryReceiptRequest struct {
+	To           string   `json:"to,omitempty"`
+	Participants []string `json:"participants,omitempty"`
+	GroupName    *string  `json:"group_name,omitempty"`
+	IsSMS        bool     `json:"is_sms,omitempty"`
+}
+
+type SetHandleRequest struct {
+	Handle string `json:"handle"`
+}
+
 type ValidateRequest struct {
 	Targets []string `json:"targets"`
 }
@@ -87,9 +98,12 @@ type SendResponse struct {
 }
 
 type StatusResponse struct {
-	Connected  bool     `json:"connected"`
-	Handle     string   `json:"handle,omitempty"`
-	AllHandles []string `json:"all_handles,omitempty"`
+	Connected     bool     `json:"connected"`
+	Handle        string   `json:"handle,omitempty"`
+	AllHandles    []string `json:"all_handles,omitempty"`
+	ContactsCount *int    `json:"contacts_count,omitempty"`
+	ContactsReady *bool   `json:"contacts_ready,omitempty"`
+	CloudSyncDone *bool   `json:"cloud_sync_done,omitempty"`
 }
 
 type HandlesResponse struct {

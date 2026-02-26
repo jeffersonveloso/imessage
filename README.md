@@ -406,6 +406,16 @@ curl -H "Authorization: Bearer TOKEN" \
 curl -H "Authorization: Bearer TOKEN" \
   "http://localhost:8080/api/v1/contact?id=tel:+15551234567"
 
+# Send delivery receipt
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"to":"tel:+15551234567"}' \
+  http://localhost:8080/api/v1/delivery-receipt
+
+# Switch active handle (phone number or email for outgoing messages)
+curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+  -d '{"handle":"mailto:you@icloud.com"}' \
+  http://localhost:8080/api/v1/set-handle
+
 # Delete chat
 curl -X POST -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
   -d '{"participants":["tel:+15551234567","tel:+15559876543"]}' \
@@ -441,7 +451,7 @@ Each request includes:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/status` | Connection status |
+| GET | `/api/v1/status` | Connection status + sync info |
 | GET | `/api/v1/handles` | List registered handles |
 | POST | `/api/v1/validate` | Check if targets are on iMessage |
 | GET | `/api/v1/chat` | Get chat info (participants, group name) |
@@ -453,7 +463,9 @@ Each request includes:
 | POST | `/api/v1/unsend` | Unsend a message |
 | POST | `/api/v1/typing` | Send typing indicator |
 | POST | `/api/v1/read-receipt` | Send read receipt |
+| POST | `/api/v1/delivery-receipt` | Send delivery receipt |
 | POST | `/api/v1/delete-chat` | Delete a chat (soft-delete local data) |
+| POST | `/api/v1/set-handle` | Switch active outgoing handle |
 | GET | `/api/v1/login/flows` | List login flows |
 | POST | `/api/v1/login/start` | Start login session |
 | POST | `/api/v1/login/step` | Submit login step input |
