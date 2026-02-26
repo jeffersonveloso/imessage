@@ -17,8 +17,8 @@ const openapiSpec = `{
   },
   "servers": [
     {
-      "url": "http://localhost:8080",
-      "description": "Local development"
+      "url": "/",
+      "description": "Current host"
     }
   ],
   "security": [
