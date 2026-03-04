@@ -54,7 +54,7 @@ See [HTTP REST API](#http-rest-api) for full details.
 
 ## Quick Start (Linux)
 
-The bridge runs on Linux using a hardware key extracted once from a real Mac. No Mac needed at runtime for Intel keys; **Apple Silicon Macs** require the NAC relay (a small background process on the Mac).
+The bridge runs on Linux using a hardware key extracted once from a real Mac. No Mac needed at runtime — the Mac is only used once to extract the key.
 
 ### Prerequisites
 
@@ -91,9 +91,16 @@ scp extract-key-intel user@old-mac:~/
 cd ~ && ./extract-key-intel
 ```
 
-This reads hardware identifiers (serial, MLB, ROM, etc.) and outputs a base64 key. The Mac is not modified and can continue to be used normally.
+This reads hardware identifiers (serial, MLB, ROM, etc.) and outputs a base64 key. The Mac is not modified and can continue to be used normally. You can turn off the Mac after extracting the key.
 
-**Apple Silicon Macs** lack the encrypted IOKit properties needed by the x86_64 NAC emulator. You must also run the NAC relay — a small HTTP server that generates Apple validation data using the Mac's native `AAAbsintheContext` framework.
+> **Intel vs Apple Silicon**: Both work. Intel keys include encrypted IOKit properties (`_enc` fields). Apple Silicon keys lack these fields, but when the bridge runs on **x86_64 Linux** (Ubuntu, Debian, etc.), the NAC emulator computes them automatically at runtime. No extra steps needed — just run `go run tools/extract-key/main.go` on either Mac type.
+
+#### NAC Relay (only needed when Docker runs on Apple Silicon Mac itself)
+
+If you run the bridge in Docker **on the same Apple Silicon Mac** (ARM Docker), the x86_64 NAC emulator cannot run. In this case, you need the NAC relay — a small HTTP server on the Mac that generates Apple validation data using the native `AAAbsintheContext` framework. **If the bridge runs on x86_64 Linux (Ubuntu, cloud VM, etc.), skip this section.**
+
+<details>
+<summary>NAC Relay setup (Apple Silicon Docker only)</summary>
 
 **Set up the relay:**
 
@@ -119,9 +126,9 @@ go run tools/extract-key/main.go -relay https://<your-mac-ip>:5001/validation-da
 
 The `extract-key` tool reads the token and certificate fingerprint from `relay-info.json` (written by the relay) and embeds them in the hardware key automatically. The relay must be running before you run `extract-key`.
 
-If the bridge runs outside your LAN (e.g., cloud VM), forward port 5001 TCP to your Mac's local IP. Lock the allowed source IPs to your bridge server's IP for defense in depth — the relay is also protected by TLS + bearer token auth.
+The Mac must stay on with the relay running — the bridge contacts it every time it needs to generate validation data.
 
-**Intel Macs**: The NAC relay is not needed. The bridge runs the x86_64 NAC emulator locally on Linux using hardware data from the extracted key. Chat history starts from when you log in and contacts appear by phone number / email.
+</details>
 
 ### Step 2: Build and install the bridge (on Linux)
 
@@ -191,10 +198,9 @@ This creates a portal room. Messages you send there are delivered as iMessages.
 
 The bridge connects directly to Apple's iMessage servers using [rustpush](https://github.com/OpenBubbles/rustpush) with local NAC validation (no SIP bypass, no relay server). On macOS with Full Disk Access, it also reads `chat.db` for message history backfill and contact name resolution.
 
-On Linux, NAC validation uses one of two paths:
+On Linux (x86_64), NAC validation uses [open-absinthe](rustpush/open-absinthe/) — an emulator for Apple's `IMDAppleServices` x86_64 binary via unicorn-engine, hooking IOKit/CoreFoundation calls and feeding them hardware data from the extracted key. This works with keys from both Intel and Apple Silicon Macs (missing `_enc` fields are computed automatically at runtime).
 
-- **Intel key**: [open-absinthe](rustpush/open-absinthe/) emulates Apple's `IMDAppleServices` x86_64 binary via unicorn-engine, hooking IOKit/CoreFoundation calls and feeding them hardware data from the extracted key
-- **Apple Silicon key + relay**: The bridge fetches validation data from a NAC relay running on the Mac, which calls Apple's native `AAAbsintheContext` framework
+If the bridge runs on an ARM host (e.g., Docker on Apple Silicon Mac), the emulator cannot run. In that case, the bridge fetches validation data from a NAC relay running on the Mac, which calls Apple's native `AAAbsintheContext` framework.
 
 ```mermaid
 flowchart TB
@@ -207,7 +213,7 @@ flowchart TB
         HS2[Homeserver] -- appservice --> Bridge2[mautrix-imessage]
         Bridge2 -- FFI --> RP2[rustpush]
         RP2 -- unicorn-engine --> NAC2[open-absinthe]
-        RP2 -. "Apple Silicon key (HTTPS + token)" .-> Relay[NAC Relay on Mac]
+        RP2 -. "ARM only (HTTPS + token)" .-> Relay[NAC Relay on Mac]
     end
     Client1[Matrix client] <--> HS1
     Client2[Matrix client] <--> HS2
