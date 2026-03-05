@@ -619,8 +619,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handle := client.Handle()
-	if err := client.ClearInstanceID(); err != nil {
-		s.log.Warn().Err(err).Msg("Failed to clear instance_id from database")
+	if err := client.ClearSessionState(); err != nil {
+		s.log.Warn().Err(err).Msg("Failed to clear session state from database")
 	}
 	client.Disconnect()
 	client.CleanupSession()
