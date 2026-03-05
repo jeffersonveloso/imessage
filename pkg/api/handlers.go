@@ -623,9 +623,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn().Err(err).Msg("Failed to clear instance_id from database")
 	}
 	client.Disconnect()
+	client.CleanupSession()
 	s.SetInstanceID("")
 
-	s.log.Info().Str("handle", handle).Msg("Client disconnected via API")
+	s.log.Info().Str("handle", handle).Msg("Client disconnected and session files cleaned up via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
 }
 
