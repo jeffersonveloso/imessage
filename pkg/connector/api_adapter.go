@@ -379,6 +379,29 @@ func (a *imClientAdapter) GetStatusInfo() (contactsCount *int, contactsReady *bo
 	return
 }
 
+func (a *imClientAdapter) ClearSessionState() error {
+	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
+	if !ok {
+		return fmt.Errorf("unexpected metadata type")
+	}
+	meta.IDSUsers = ""
+	meta.IDSIdentity = ""
+	meta.APSState = ""
+	meta.PreferredHandle = ""
+	meta.AccountUsername = ""
+	meta.AccountHashedPasswordHex = ""
+	meta.AccountPET = ""
+	meta.AccountADSID = ""
+	meta.AccountDSID = ""
+	meta.AccountSPDBase64 = ""
+	meta.MmeDelegateJSON = ""
+	meta.InstanceID = ""
+	if err := a.client.UserLogin.Save(context.Background()); err != nil {
+		return fmt.Errorf("failed to clear session state: %w", err)
+	}
+	return nil
+}
+
 func (a *imClientAdapter) ClearInstanceID() error {
 	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
 	if !ok {
