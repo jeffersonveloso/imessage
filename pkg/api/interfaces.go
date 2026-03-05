@@ -10,6 +10,9 @@ import (
 // Implemented by the connector package.
 type IMClientProvider interface {
 	GetActiveClient() (IMClient, error)
+	// GetAnyClient returns any cached login client, even if disconnected.
+	// Used by logout to clean up sessions that exist in the DB but aren't connected.
+	GetAnyClient() (IMClient, error)
 	Reconnect(ctx context.Context) error
 }
 

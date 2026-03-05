@@ -612,7 +612,12 @@ func (s *Server) handleChats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// Try connected client first, fall back to any cached login (even disconnected).
+	// This ensures logout works even if the session exists in DB but isn't connected.
 	client, err := s.provider.GetActiveClient()
+	if err != nil {
+		client, err = s.provider.GetAnyClient()
+	}
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "no active session to disconnect", "NOT_CONNECTED")
 		return
