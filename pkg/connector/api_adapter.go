@@ -406,6 +406,14 @@ func (a *imClientAdapter) ClearSessionState() error {
 }
 
 func (a *imClientAdapter) DeleteLogin(ctx context.Context) error {
+	// Clean up cloud backfill tables before deleting the login record,
+	// since these custom tables don't have ON DELETE CASCADE foreign keys.
+	if a.client.cloudStore != nil {
+		if err := a.client.cloudStore.clearAllData(ctx); err != nil {
+			log := a.client.UserLogin.Log.With().Str("action", "logout_cleanup").Logger()
+			log.Warn().Err(err).Msg("Failed to clear cloud backfill data")
+		}
+	}
 	a.client.UserLogin.Delete(ctx, status.BridgeState{
 		StateEvent: status.StateLoggedOut,
 	}, bridgev2.DeleteOpts{
