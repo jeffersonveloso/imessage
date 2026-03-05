@@ -178,6 +178,17 @@ func (l *AppleIDLogin) finishLogin(ctx context.Context) (*bridgev2.LoginStep, er
 		session = nil
 	}
 
+	// Discard cached session if it belongs to a different Apple ID account.
+	// This prevents stale handles/registration from a previous account leaking
+	// into a new login (e.g., logout + login with different account).
+	if session != nil && session.AccountUsername != "" && session.AccountUsername != l.username {
+		log.Info().
+			Str("cached_account", session.AccountUsername).
+			Str("current_account", l.username).
+			Msg("Cached session belongs to a different account, discarding")
+		session = nil
+	}
+
 	// Reuse existing identity if available (avoids "new Mac" notifications)
 	var existingIdentityArg **rustpushgo.WrappedIdsngmIdentity
 	if existing := getExistingIdentity(session, log); existing != nil {
@@ -420,6 +431,15 @@ func (l *ExternalKeyLogin) finishLogin(ctx context.Context) (*bridgev2.LoginStep
 		session = nil
 	}
 
+	// Discard cached session if it belongs to a different Apple ID account.
+	if session != nil && session.AccountUsername != "" && session.AccountUsername != l.username {
+		log.Info().
+			Str("cached_account", session.AccountUsername).
+			Str("current_account", l.username).
+			Msg("Cached session belongs to a different account, discarding")
+		session = nil
+	}
+
 	// Reuse existing identity if available (avoids "new Mac" notifications)
 	var existingIdentityArg **rustpushgo.WrappedIdsngmIdentity
 	if existing := getExistingIdentity(session, log); existing != nil {
@@ -508,6 +528,7 @@ type cachedSessionState struct {
 	APSState        string
 	IDSUsers        string
 	PreferredHandle string
+	AccountUsername string // Apple ID that created this session
 	source          string // "database" or "backup file", for logging
 }
 
@@ -526,6 +547,7 @@ func loadCachedSession(user *bridgev2.User, log zerolog.Logger) *cachedSessionSt
 					APSState:        meta.APSState,
 					IDSUsers:        meta.IDSUsers,
 					PreferredHandle: meta.PreferredHandle,
+					AccountUsername: meta.AccountUsername,
 					source:          "database",
 				}
 			}
@@ -540,6 +562,7 @@ func loadCachedSession(user *bridgev2.User, log zerolog.Logger) *cachedSessionSt
 			APSState:        state.APSState,
 			IDSUsers:        state.IDSUsers,
 			PreferredHandle: state.PreferredHandle,
+			AccountUsername: state.AccountUsername,
 			source:          "backup file",
 		}
 	}
