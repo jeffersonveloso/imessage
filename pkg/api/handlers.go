@@ -619,14 +619,16 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handle := client.Handle()
-	if err := client.ClearSessionState(); err != nil {
-		s.log.Warn().Err(err).Msg("Failed to clear session state from database")
+	// Delete the UserLogin record (and associated user_portal rows) from the
+	// database so no stale session state or portal associations leak into the
+	// next login.  This also disconnects the client internally.
+	if err := client.DeleteLogin(r.Context()); err != nil {
+		s.log.Warn().Err(err).Msg("Failed to delete login from database")
 	}
-	client.Disconnect()
 	client.CleanupSession()
 	s.SetInstanceID("")
 
-	s.log.Info().Str("handle", handle).Msg("Client disconnected and session files cleaned up via API")
+	s.log.Info().Str("handle", handle).Msg("Client login deleted and session files cleaned up via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
 }
 

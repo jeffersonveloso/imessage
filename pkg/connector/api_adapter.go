@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/status"
+
 	"github.com/lrhodin/imessage/pkg/api"
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
@@ -399,6 +402,16 @@ func (a *imClientAdapter) ClearSessionState() error {
 	if err := a.client.UserLogin.Save(context.Background()); err != nil {
 		return fmt.Errorf("failed to clear session state: %w", err)
 	}
+	return nil
+}
+
+func (a *imClientAdapter) DeleteLogin(ctx context.Context) error {
+	a.client.UserLogin.Delete(ctx, status.BridgeState{
+		StateEvent: status.StateLoggedOut,
+	}, bridgev2.DeleteOpts{
+		LogoutRemote: false,
+		BlockingCleanup: true,
+	})
 	return nil
 }
 
