@@ -626,11 +626,15 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err := client.ClearInstanceID(); err != nil {
 		s.log.Warn().Err(err).Msg("Failed to clear instance_id from database")
 	}
-	client.Disconnect()
+	// Delete the UserLogin record (and associated user_portal rows) from the
+	// database, matching the bridge framework's Logout behavior.
+	if err := client.DeleteLogin(r.Context()); err != nil {
+		s.log.Warn().Err(err).Msg("Failed to delete login from database")
+	}
 	client.CleanupSession()
 	s.SetInstanceID("")
 
-	s.log.Info().Str("handle", handle).Msg("Client disconnected and session files cleaned up via API")
+	s.log.Info().Str("handle", handle).Msg("Client login deleted and session files cleaned up via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
 }
 
