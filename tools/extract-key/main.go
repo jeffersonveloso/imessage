@@ -494,10 +494,11 @@ func main() {
 	hasEncFields := len(serialEnc) > 0
 
 	if isAppleSilicon && relayURL == "" {
-		fmt.Fprintf(os.Stderr, "  ⚠️  Apple Silicon detected — encrypted IOKit properties are absent.\n")
-		fmt.Fprintf(os.Stderr, "  The x86_64 NAC emulator on Linux will fail without them.\n")
-		fmt.Fprintf(os.Stderr, "  You MUST run the NAC relay on this Mac and re-extract with:\n")
+		fmt.Fprintf(os.Stderr, "  ℹ️  Apple Silicon detected — encrypted IOKit properties (_enc fields) are absent.\n")
+		fmt.Fprintf(os.Stderr, "  This key works as-is on x86_64 Linux (Ubuntu, Debian, etc.) —\n")
+		fmt.Fprintf(os.Stderr, "  the NAC emulator computes the _enc fields automatically at runtime.\n")
 		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "  If the bridge runs in Docker on THIS Mac (ARM), you need the NAC relay:\n")
 		fmt.Fprintf(os.Stderr, "    1. Start the relay:  go run tools/nac-relay/main.go\n")
 		fmt.Fprintf(os.Stderr, "    2. Re-extract:       go run tools/extract-key/main.go -relay https://<this-ip>:5001/validation-data\n")
 		fmt.Fprintf(os.Stderr, "\n")

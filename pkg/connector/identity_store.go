@@ -191,6 +191,64 @@ func loadSessionState(log zerolog.Logger) PersistedSessionState {
 	return state
 }
 
+// cleanupSessionFiles removes all persisted session files:
+// session.json, identity.plist, trustedpeers.plist, and anisette state.
+// Called during logout to ensure no stale credentials remain on disk.
+func cleanupSessionFiles(log zerolog.Logger) {
+	// session.json
+	if path, err := sessionFilePath(); err == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", path).Msg("Failed to remove session file")
+		} else if err == nil {
+			log.Info().Str("path", path).Msg("Removed session file")
+		}
+	}
+
+	// legacy identity.plist
+	if path, err := legacyIdentityFilePath(); err == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", path).Msg("Failed to remove legacy identity file")
+		} else if err == nil {
+			log.Info().Str("path", path).Msg("Removed legacy identity file")
+		}
+	}
+
+	// trustedpeers.plist
+	if path, err := trustedPeersFilePath(); err == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", path).Msg("Failed to remove trusted peers file")
+		} else if err == nil {
+			log.Info().Str("path", path).Msg("Removed trusted peers file")
+		}
+	}
+
+	// state files — look in common locations
+	for _, candidate := range []string{
+		"state/anisette/state.plist",      // anisette provisioning state
+		"/data/state/anisette/state.plist",
+		"state/id_cache.plist",            // IDS identity lookup cache
+		"/data/state/id_cache.plist",
+	} {
+		if err := os.Remove(candidate); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", candidate).Msg("Failed to remove state file")
+		} else if err == nil {
+			log.Info().Str("path", candidate).Msg("Removed state file")
+		}
+	}
+
+	// logs directory
+	for _, logsDir := range []string{
+		"logs",
+		"/data/logs",
+	} {
+		if err := os.RemoveAll(logsDir); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", logsDir).Msg("Failed to remove logs directory")
+		} else if err == nil {
+			log.Info().Str("path", logsDir).Msg("Removed logs directory")
+		}
+	}
+}
+
 // ListHandles returns the available iMessage handles (phone numbers and
 // email addresses) from the backup session state. Returns nil if no valid
 // session state is found. Intended for CLI use (list-handles subcommand).

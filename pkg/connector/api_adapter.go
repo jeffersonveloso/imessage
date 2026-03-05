@@ -22,6 +22,10 @@ func (a *imClientAdapter) Handle() string        { return a.client.handle }
 func (a *imClientAdapter) AllHandles() []string   { return a.client.allHandles }
 func (a *imClientAdapter) IsLoggedIn() bool       { return a.client.IsLoggedIn() }
 func (a *imClientAdapter) Disconnect()            { a.client.Disconnect() }
+func (a *imClientAdapter) CleanupSession() {
+	log := a.client.UserLogin.Log.With().Str("action", "logout_cleanup").Logger()
+	cleanupSessionFiles(log)
+}
 func (a *imClientAdapter) NormalizeIdentifier(id string) string {
 	return normalizeIdentifierForPortalID(id)
 }
