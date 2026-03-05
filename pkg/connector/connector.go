@@ -50,6 +50,17 @@ func (c *IMConnector) GetActiveClient() (api.IMClient, error) {
 	return nil, errors.New("no active iMessage connection")
 }
 
+// GetAnyClient returns the first cached IMClient regardless of connection state.
+// Used by logout to clean up sessions that exist in the DB but aren't connected.
+func (c *IMConnector) GetAnyClient() (api.IMClient, error) {
+	for _, login := range c.Bridge.GetAllCachedUserLogins() {
+		if client, ok := login.Client.(*IMClient); ok {
+			return &imClientAdapter{client: client}, nil
+		}
+	}
+	return nil, errors.New("no iMessage session found")
+}
+
 // Reconnect disconnects and re-establishes the iMessage session.
 // Works on any cached login with credentials, even if currently disconnected.
 func (c *IMConnector) Reconnect(ctx context.Context) error {
