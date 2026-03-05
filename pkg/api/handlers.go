@@ -613,7 +613,6 @@ func (s *Server) handleChats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	// Try connected client first, fall back to any cached login (even disconnected).
-	// This ensures logout works even if the session exists in DB but isn't connected.
 	client, err := s.provider.GetActiveClient()
 	if err != nil {
 		client, err = s.provider.GetAnyClient()
@@ -624,16 +623,14 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handle := client.Handle()
-	// Delete the UserLogin record (and associated user_portal rows) from the
-	// database so no stale session state or portal associations leak into the
-	// next login.  This also disconnects the client internally.
-	if err := client.DeleteLogin(r.Context()); err != nil {
-		s.log.Warn().Err(err).Msg("Failed to delete login from database")
+	if err := client.ClearInstanceID(); err != nil {
+		s.log.Warn().Err(err).Msg("Failed to clear instance_id from database")
 	}
+	client.Disconnect()
 	client.CleanupSession()
 	s.SetInstanceID("")
 
-	s.log.Info().Str("handle", handle).Msg("Client login deleted and session files cleaned up via API")
+	s.log.Info().Str("handle", handle).Msg("Client disconnected and session files cleaned up via API")
 	writeJSON(w, http.StatusOK, OkResponse{Status: "disconnected"})
 }
 

@@ -433,7 +433,7 @@ func (s *cloudBackfillStore) setChatSyncVersion(ctx context.Context, version int
 // cached chats, and cached messages. Used on fresh bootstrap when the bridge
 // DB was reset but the cloud tables survived.
 func (s *cloudBackfillStore) clearAllData(ctx context.Context) error {
-	for _, table := range []string{"cloud_sync_state", "cloud_chat", "cloud_message", "cloud_attachment_cache", "group_photo_cache"} {
+	for _, table := range []string{"cloud_sync_state", "cloud_chat", "cloud_message", "cloud_attachment_cache"} {
 		if _, err := s.db.Exec(ctx,
 			fmt.Sprintf(`DELETE FROM %s WHERE login_id=$1`, table),
 			s.loginID,

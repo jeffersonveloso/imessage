@@ -222,26 +222,12 @@ func cleanupSessionFiles(log zerolog.Logger) {
 		}
 	}
 
-	// keystore.plist — IDS signing keys, MUST be removed to prevent
-	// cross-account key reuse (which can trigger Apple account bans).
-	// Lives in the same XDG directory as session.json.
-	if sessionPath, err := sessionFilePath(); err == nil {
-		keystorePath := filepath.Join(filepath.Dir(sessionPath), "keystore.plist")
-		if err := os.Remove(keystorePath); err != nil && !os.IsNotExist(err) {
-			log.Warn().Err(err).Str("path", keystorePath).Msg("Failed to remove keystore file")
-		} else if err == nil {
-			log.Info().Str("path", keystorePath).Msg("Removed keystore file")
-		}
-	}
-
 	// state files — look in common locations
 	for _, candidate := range []string{
 		"state/anisette/state.plist",      // anisette provisioning state
 		"/data/state/anisette/state.plist",
 		"state/id_cache.plist",            // IDS identity lookup cache
 		"/data/state/id_cache.plist",
-		"state/keystore.plist",            // legacy keystore location
-		"/data/state/keystore.plist",
 	} {
 		if err := os.Remove(candidate); err != nil && !os.IsNotExist(err) {
 			log.Warn().Err(err).Str("path", candidate).Msg("Failed to remove state file")

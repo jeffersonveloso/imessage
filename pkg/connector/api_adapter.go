@@ -6,9 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/status"
-
 	"github.com/lrhodin/imessage/pkg/api"
 	"github.com/lrhodin/imessage/pkg/rustpushgo"
 )
@@ -380,47 +377,6 @@ func (a *imClientAdapter) GetStatusInfo() (contactsCount *int, contactsReady *bo
 	cloudSyncDone = &syncDone
 
 	return
-}
-
-func (a *imClientAdapter) ClearSessionState() error {
-	meta, ok := a.client.UserLogin.Metadata.(*UserLoginMetadata)
-	if !ok {
-		return fmt.Errorf("unexpected metadata type")
-	}
-	meta.IDSUsers = ""
-	meta.IDSIdentity = ""
-	meta.APSState = ""
-	meta.PreferredHandle = ""
-	meta.AccountUsername = ""
-	meta.AccountHashedPasswordHex = ""
-	meta.AccountPET = ""
-	meta.AccountADSID = ""
-	meta.AccountDSID = ""
-	meta.AccountSPDBase64 = ""
-	meta.MmeDelegateJSON = ""
-	meta.InstanceID = ""
-	if err := a.client.UserLogin.Save(context.Background()); err != nil {
-		return fmt.Errorf("failed to clear session state: %w", err)
-	}
-	return nil
-}
-
-func (a *imClientAdapter) DeleteLogin(ctx context.Context) error {
-	// Clean up cloud backfill tables before deleting the login record,
-	// since these custom tables don't have ON DELETE CASCADE foreign keys.
-	if a.client.cloudStore != nil {
-		if err := a.client.cloudStore.clearAllData(ctx); err != nil {
-			log := a.client.UserLogin.Log.With().Str("action", "logout_cleanup").Logger()
-			log.Warn().Err(err).Msg("Failed to clear cloud backfill data")
-		}
-	}
-	a.client.UserLogin.Delete(ctx, status.BridgeState{
-		StateEvent: status.StateLoggedOut,
-	}, bridgev2.DeleteOpts{
-		LogoutRemote: false,
-		BlockingCleanup: true,
-	})
-	return nil
 }
 
 func (a *imClientAdapter) ClearInstanceID() error {
