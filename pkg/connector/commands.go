@@ -138,7 +138,7 @@ func fnRestoreChat(ce *commands.Event) {
 			delete(client.recentlyDeletedPortals, portalID)
 			client.recentlyDeletedPortalsMu.Unlock()
 
-			client.Main.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
+			client.queueRemoteEvent(&simplevent.ChatResync{
 				EventMeta: simplevent.EventMeta{
 					Type:         bridgev2.RemoteEventChatResync,
 					PortalKey:    portalKey,
@@ -203,7 +203,7 @@ func (c *IMClient) restorePortalByID(ctx context.Context, portalID string) error
 		ID:       networkid.PortalID(portalID),
 		Receiver: c.UserLogin.ID,
 	}
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatResync{
+	c.queueRemoteEvent(&simplevent.ChatResync{
 		EventMeta: simplevent.EventMeta{
 			Type:         bridgev2.RemoteEventChatResync,
 			PortalKey:    portalKey,

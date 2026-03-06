@@ -36,6 +36,7 @@ func runAPIOnly(br *mxmain.BridgeMain) {
 
 	// Ensure the HTTP API is enabled — that's the whole point.
 	c := br.Connector.(*connector.IMConnector)
+	c.APIOnly = true
 	if !c.Config.API.Enabled {
 		fmt.Fprintln(os.Stderr, "[!] API-only mode requires the HTTP API to be enabled.")
 		fmt.Fprintln(os.Stderr, "    Set network.api.enabled = true in your config.")

@@ -464,7 +464,7 @@ func (c *IMClient) queueGhostReceiptFallback(
 	guid string,
 	readTime time.Time,
 ) {
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Receipt{
+	c.queueRemoteEvent(&simplevent.Receipt{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventReadReceipt,
 			PortalKey: portalKey,
@@ -752,6 +752,17 @@ func (c *IMClient) Disconnect() {
 
 func (c *IMClient) IsLoggedIn() bool {
 	return c.client != nil
+}
+
+// queueRemoteEvent wraps Bridge.QueueRemoteEvent and silently drops events
+// when running in API-only mode (no Matrix homeserver). This prevents the
+// bridge framework from attempting Matrix HTTP calls that always fail and
+// pollute logs with connection-refused errors.
+func (c *IMClient) queueRemoteEvent(evt bridgev2.RemoteEvent) {
+	if c.Main.APIOnly {
+		return
+	}
+	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, evt)
 }
 
 func (c *IMClient) LogoutRemote(ctx context.Context) {
@@ -1265,7 +1276,7 @@ func (c *IMClient) handleMessage(log zerolog.Logger, msg rustpushgo.WrappedMessa
 	}
 
 	if msg.Text != nil && *msg.Text != "" && strings.TrimRight(*msg.Text, "\ufffc \n") != "" {
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Message[*rustpushgo.WrappedMessage]{
+		c.queueRemoteEvent(&simplevent.Message[*rustpushgo.WrappedMessage]{
 			EventMeta: simplevent.EventMeta{
 				Type:         bridgev2.RemoteEventMessage,
 				PortalKey:    portalKey,
@@ -1298,7 +1309,7 @@ func (c *IMClient) handleMessage(log zerolog.Logger, msg rustpushgo.WrappedMessa
 			Index:          attIndex,
 		}
 		attIndex++
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Message[*attachmentMessage]{
+		c.queueRemoteEvent(&simplevent.Message[*attachmentMessage]{
 			EventMeta: simplevent.EventMeta{
 				Type:         bridgev2.RemoteEventMessage,
 				PortalKey:    portalKey,
@@ -1333,7 +1344,7 @@ func (c *IMClient) handleTapback(log zerolog.Logger, msg rustpushgo.WrappedMessa
 		evtType = bridgev2.RemoteEventReactionRemove
 	}
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Reaction{
+	c.queueRemoteEvent(&simplevent.Reaction{
 		EventMeta: simplevent.EventMeta{
 			Type:      evtType,
 			PortalKey: portalKey,
@@ -1357,7 +1368,7 @@ func (c *IMClient) handleEdit(log zerolog.Logger, msg rustpushgo.WrappedMessage)
 	}
 	newText := ptrStringOr(msg.EditNewText, "")
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Message[string]{
+	c.queueRemoteEvent(&simplevent.Message[string]{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventEdit,
 			PortalKey: portalKey,
@@ -1405,7 +1416,7 @@ func (c *IMClient) handleUnsend(log zerolog.Logger, msg rustpushgo.WrappedMessag
 		portalKey = c.makePortalKey(msg.Participants, msg.GroupName, msg.Sender, msg.SenderGuid)
 	}
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.MessageRemove{
+	c.queueRemoteEvent(&simplevent.MessageRemove{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventMessageRemove,
 			PortalKey: portalKey,
@@ -1460,7 +1471,7 @@ func (c *IMClient) handleRename(log zerolog.Logger, msg rustpushgo.WrappedMessag
 		}()
 	}
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatInfoChange{
+	c.queueRemoteEvent(&simplevent.ChatInfoChange{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatInfoChange,
 			PortalKey: portalKey,
@@ -1488,7 +1499,7 @@ func (c *IMClient) handleParticipantChange(log zerolog.Logger, msg rustpushgo.Wr
 	if len(msg.NewParticipants) == 0 {
 		// No new participant list — fall back to a resync with current info.
 		log.Warn().Msg("Participant change with empty NewParticipants, falling back to resync")
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatResync{
+		c.queueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatResync,
 				PortalKey: oldPortalKey,
@@ -1582,7 +1593,7 @@ func (c *IMClient) handleParticipantChange(log zerolog.Logger, msg rustpushgo.Wr
 
 	// Queue a ChatInfoChange with the full member list so bridgev2 syncs
 	// the Matrix room membership (invites new members, kicks removed ones).
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatInfoChange{
+	c.queueRemoteEvent(&simplevent.ChatInfoChange{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatInfoChange,
 			PortalKey: finalPortalKey,
@@ -1621,7 +1632,7 @@ func (c *IMClient) handleIconChange(log zerolog.Logger, msg rustpushgo.WrappedMe
 				log.Warn().Err(err).Msg("Failed to clear cached group photo in DB")
 			}
 		}
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatInfoChange{
+		c.queueRemoteEvent(&simplevent.ChatInfoChange{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventChatInfoChange,
 				PortalKey: portalKey,
@@ -1661,7 +1672,7 @@ func (c *IMClient) handleIconChange(log zerolog.Logger, msg rustpushgo.WrappedMe
 		}
 	}
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatInfoChange{
+	c.queueRemoteEvent(&simplevent.ChatInfoChange{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventChatInfoChange,
 			PortalKey: portalKey,
@@ -1803,7 +1814,7 @@ resolved:
 		c.sendGhostReadReceipt(&log, sender.Sender, portalKey, msg.Uuid, readTime)
 	} else {
 		// Self-receipt (unlikely for APNs read receipts, but handle gracefully).
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Receipt{
+		c.queueRemoteEvent(&simplevent.Receipt{
 			EventMeta: simplevent.EventMeta{
 				Type:      bridgev2.RemoteEventReadReceipt,
 				PortalKey: portalKey,
@@ -1907,7 +1918,7 @@ func (c *IMClient) handleTyping(log zerolog.Logger, msg rustpushgo.WrappedMessag
 	}
 found:
 
-	c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Typing{
+	c.queueRemoteEvent(&simplevent.Typing{
 		EventMeta: simplevent.EventMeta{
 			Type:      bridgev2.RemoteEventTyping,
 			PortalKey: portalKey,
@@ -2991,7 +3002,7 @@ func (c *IMClient) FetchMessages(ctx context.Context, params bridgev2.FetchMessa
 				// conversation as read, overwriting forceMarkRead's server-time
 				// receipt via SetBeeperInboxState with correct BeeperReadExtra["ts"].
 				if readByMe, err := cloudStoreDone.getConversationReadByMe(context.Background(), portalID); err == nil && readByMe {
-					c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.Receipt{
+					c.queueRemoteEvent(&simplevent.Receipt{
 						EventMeta: simplevent.EventMeta{
 							Type:      bridgev2.RemoteEventReadReceipt,
 							PortalKey: portalKey,
@@ -3308,7 +3319,7 @@ func (c *IMClient) cloudTapbackToBackfill(row cloudMessageRow, sender bridgev2.E
 		ID:       networkid.PortalID(row.PortalID),
 		Receiver: c.UserLogin.ID,
 	}
-	c.UserLogin.QueueRemoteEvent(&simplevent.Reaction{
+	c.queueRemoteEvent(&simplevent.Reaction{
 		EventMeta: simplevent.EventMeta{
 			Type:      evtType,
 			PortalKey: portalKey,
@@ -4687,7 +4698,7 @@ func (c *IMClient) makePortalKey(participants []string, groupName *string, sende
 				newName := *groupName
 				pid := string(portalID)
 				go func() {
-					c.UserLogin.QueueRemoteEvent(&simplevent.ChatInfoChange{
+					c.queueRemoteEvent(&simplevent.ChatInfoChange{
 						EventMeta: simplevent.EventMeta{
 							Type: bridgev2.RemoteEventChatInfoChange,
 							PortalKey: networkid.PortalKey{

@@ -266,7 +266,7 @@ func (c *IMClient) refreshGroupPortalNamesFromContacts(log zerolog.Logger) {
 			continue
 		}
 
-		c.UserLogin.QueueRemoteEvent(&simplevent.ChatInfoChange{
+		c.queueRemoteEvent(&simplevent.ChatInfoChange{
 			EventMeta: simplevent.EventMeta{
 				Type: bridgev2.RemoteEventChatInfoChange,
 				PortalKey: networkid.PortalKey{
@@ -1156,7 +1156,7 @@ func (c *IMClient) ingestCloudChats(ctx context.Context, chats []rustpushgo.Wrap
 					Str("portal_id", portalID).
 					Str("record_name", recordName).
 					Msg("CloudKit tombstone: deleting bridge portal for chat in recycle bin")
-				c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatDelete{
+				c.queueRemoteEvent(&simplevent.ChatDelete{
 					EventMeta: simplevent.EventMeta{
 						Type:      bridgev2.RemoteEventChatDelete,
 						PortalKey: portalKey,
@@ -1593,7 +1593,7 @@ func (c *IMClient) createPortalsFromCloudSync(ctx context.Context, log zerolog.L
 			Int("total", len(ordered)).
 			Int64("newest_ts", newestTS).
 			Msg("Queuing ChatResync for portal")
-		c.UserLogin.QueueRemoteEvent(&simplevent.ChatResync{
+		c.queueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:         bridgev2.RemoteEventChatResync,
 				PortalKey:    portalKey,

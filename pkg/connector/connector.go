@@ -34,6 +34,7 @@ type IMConnector struct {
 	Bridge    *bridgev2.Bridge
 	Config    IMConfig
 	apiServer *api.Server
+	APIOnly   bool // true when running without a Matrix homeserver
 }
 
 var _ bridgev2.NetworkConnector = (*IMConnector)(nil)
