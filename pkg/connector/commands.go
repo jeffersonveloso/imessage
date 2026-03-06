@@ -674,7 +674,7 @@ func fnRestoreChatFromChatDB(ce *commands.Event, login *bridgev2.UserLogin, clie
 			delete(client.recentlyDeletedPortals, chosen.portalID)
 			client.recentlyDeletedPortalsMu.Unlock()
 
-			client.Main.Bridge.QueueRemoteEvent(login, &simplevent.ChatResync{
+			client.queueRemoteEvent(&simplevent.ChatResync{
 				EventMeta: simplevent.EventMeta{
 					Type:         bridgev2.RemoteEventChatResync,
 					PortalKey:    portalKey,
@@ -1138,7 +1138,6 @@ func (c *IMClient) restorePortalByID(_ context.Context, portalID string) error {
 		ID:       networkid.PortalID(portalID),
 		Receiver: c.UserLogin.ID,
 	}
-
 	if c.Main.Config.UseCloudKitBackfill() && c.cloudStore != nil {
 		return c.startRestoreBackfillPipeline(restorePipelineOptions{
 			PortalID:       portalID,
@@ -1148,7 +1147,7 @@ func (c *IMClient) restorePortalByID(_ context.Context, portalID string) error {
 		})
 	} else {
 		// chatdb backend — use existing local data.
-		c.Main.Bridge.QueueRemoteEvent(c.UserLogin, &simplevent.ChatResync{
+		c.queueRemoteEvent(&simplevent.ChatResync{
 			EventMeta: simplevent.EventMeta{
 				Type:         bridgev2.RemoteEventChatResync,
 				PortalKey:    portalKey,
@@ -1158,7 +1157,6 @@ func (c *IMClient) restorePortalByID(_ context.Context, portalID string) error {
 			GetChatInfoFunc: c.GetChatInfo,
 		})
 	}
-
 	return nil
 }
 
