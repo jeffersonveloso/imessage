@@ -2063,3 +2063,4 @@ int32_t rustpushgo_cgo_MessageCallback(uint64_t, int32_t, uint8_t *, int32_t, Ru
 int32_t rustpushgo_cgo_RustLogSink(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
 int32_t rustpushgo_cgo_StatusCallback(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
 int32_t rustpushgo_cgo_UpdateUsersCallback(uint64_t, int32_t, uint8_t *, int32_t, RustBuffer *);
+

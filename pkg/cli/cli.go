@@ -1104,6 +1104,7 @@ func PrintHelp() {
 	rows := [][2]string{
 		{"setup", "configure & start (re-run to flip a toggle, e.g. backfill)"},
 		{"setup-beeper", "configure for Beeper (re-run to reconfigure)"},
+		{"api-only", "run the HTTP REST API without a Matrix homeserver"},
 		{"setup 1", "add / reconfigure the SECOND account"},
 		{"setup-beeper 1", "add / reconfigure the SECOND account (Beeper)"},
 		{"start", "start the bridge"},
