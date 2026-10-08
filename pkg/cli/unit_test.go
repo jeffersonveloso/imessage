@@ -506,3 +506,26 @@ func TestOurOwnUnitRoundTrips(t *testing.T) {
 		t.Errorf("re-resolve data = %q, which is outside %q — user %q could not chdir there", rData, xdg, owner)
 	}
 }
+
+// A unit in both scopes means two bridge-alls on one config, which knock each
+// other off Beeper. Root's case is the LXC one: setup run once from an SSH login
+// (user unit) and once from the container console (system unit).
+func TestDecideDuplicateUnit(t *testing.T) {
+	cases := []struct {
+		name                   string
+		root, inUser, inSystem bool
+		want                   duplicateUnitAction
+	}{
+		{"root, both scopes", true, true, true, duplicateRetireUser},
+		{"non-root, both scopes", false, true, true, duplicateWarn},
+		{"root, only user unit is never removed", true, true, false, duplicateNone},
+		{"root, only system unit", true, false, true, duplicateNone},
+		{"non-root, only user unit", false, true, false, duplicateNone},
+		{"nothing installed", true, false, false, duplicateNone},
+	}
+	for _, c := range cases {
+		if got := decideDuplicateUnit(c.root, c.inUser, c.inSystem); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}

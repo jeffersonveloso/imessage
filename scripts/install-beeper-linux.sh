@@ -37,6 +37,21 @@ fi
 # (`systemctl --user`) calls never use this — they run as the logged-in user.
 if [ "$(id -u)" = "0" ]; then SUDO=""; else SUDO="sudo"; fi
 
+# Reach this user's systemd manager even from a shell that didn't export
+# XDG_RUNTIME_DIR (an LXC console or `lxc-attach`, unlike an SSH login).
+# Without it a user-scope unit is invisible here, and setup installs a SECOND,
+# system-scope unit: two bridge-alls on one config that knock each other off
+# Beeper (conn_replaced). Only when a user unit already exists or the user
+# lingers: otherwise the manager is up only for an open SSH session, and a fresh
+# install would land in a user unit that dies at logout. Skipped for root under
+# sudo, whose runtime dir belongs to someone else. Mirrors adoptUserBus() in pkg/cli.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && ! { [ "$(id -u)" = "0" ] && [ -n "${SUDO_USER:-}" ]; } \
+   && [ -d "/run/user/$(id -u)" ] \
+   && { [ -f "$HOME/.config/systemd/user/$SERVICE_NAME.service" ] || [ -f "/var/lib/systemd/linger/$(id -un)" ]; }; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    systemctl --user show-environment >/dev/null 2>&1 || unset XDG_RUNTIME_DIR
+fi
+
 # Where we build/cache bbctl (sparse clone — only cmd/bbctl/)
 
 echo ""
@@ -1200,7 +1215,16 @@ USER_SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME.service"
 SYSTEM_SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
 if command -v systemctl >/dev/null 2>&1; then
-    if systemctl --user status >/dev/null 2>&1; then
+    # An existing unit decides the scope, so re-running setup updates it rather
+    # than adding a second one in the other scope; the user-session probe only
+    # decides a fresh install. Same precedence as linuxSystemctlFor in pkg/cli.
+    if [ -f "$USER_SERVICE_FILE" ] && systemctl --user status >/dev/null 2>&1; then
+        SYSTEMD_MODE="user"
+        SERVICE_FILE="$USER_SERVICE_FILE"
+    elif [ -f "$SYSTEM_SERVICE_FILE" ]; then
+        SYSTEMD_MODE="system"
+        SERVICE_FILE="$SYSTEM_SERVICE_FILE"
+    elif systemctl --user status >/dev/null 2>&1; then
         SYSTEMD_MODE="user"
         SERVICE_FILE="$USER_SERVICE_FILE"
     else
@@ -1215,7 +1239,7 @@ fi
 install_systemd_user() {
     # Enable lingering so user services survive SSH session closures
     if command -v loginctl >/dev/null 2>&1 && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]; then
-        sudo loginctl enable-linger "$USER" 2>/dev/null || true
+        $SUDO loginctl enable-linger "$USER" 2>/dev/null || true
     fi
     mkdir -p "$(dirname "$USER_SERVICE_FILE")"
     cat > "$USER_SERVICE_FILE" << EOF

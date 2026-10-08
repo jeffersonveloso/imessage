@@ -169,6 +169,106 @@ func userBusReachable() bool {
 	return exec.Command("systemctl", "--user", "show-environment").Run() == nil
 }
 
+// adoptUserBus points `systemctl --user` at this user's own systemd manager when
+// the shell didn't export XDG_RUNTIME_DIR, which is what an LXC console or
+// `lxc-attach` shell looks like (an SSH login exports it). Without it a
+// user-scope unit is invisible from that shell: start/stop miss the running
+// bridge, and setup installs a SECOND, system-scope unit beside it. Two
+// bridge-alls on one config then knock each other off Beeper (conn_replaced).
+// It's set in our own environment so the embedded setup scripts inherit it.
+// The sudo path is left alone: there the user's runtime dir isn't root's.
+func adoptUserBus() {
+	if runtime.GOOS != "linux" || os.Getenv("XDG_RUNTIME_DIR") != "" || os.Getenv("SUDO_USER") != "" {
+		return
+	}
+	dir := "/run/user/" + strconv.Itoa(os.Getuid())
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return
+	}
+	// Only when a user unit already exists or the user lingers. Otherwise the
+	// manager is up only for an open SSH session, and a fresh install from the
+	// console would land in a user unit that dies at logout and never boots.
+	_, unitErr := os.Stat(filepath.Join(userUnitDir(effectiveHome()), "corten-matrix.service"))
+	lingers := false
+	if u, err := user.Current(); err == nil {
+		_, lerr := os.Stat(filepath.Join("/var/lib/systemd/linger", u.Username))
+		lingers = lerr == nil
+	}
+	if unitErr != nil && !lingers {
+		return
+	}
+	_ = os.Setenv("XDG_RUNTIME_DIR", dir)
+	if !userBusReachable() {
+		_ = os.Unsetenv("XDG_RUNTIME_DIR")
+	}
+}
+
+type duplicateUnitAction int
+
+const (
+	duplicateNone       duplicateUnitAction = iota
+	duplicateRetireUser                     // remove the user-scope unit, keep the system one
+	duplicateWarn                           // report it, change nothing
+)
+
+// decideDuplicateUnit says what to do when the bridge unit may be installed in
+// both scopes. Both run `bridge-all` against the same config, so one always has
+// to go. For root (no sudo), the system unit is the one the install scripts
+// write in a container and the one every shell can reach, so the user unit is
+// retired. For anyone else it's reported but left alone: which unit they meant
+// to keep isn't ours to guess.
+func decideDuplicateUnit(root, inUser, inSystem bool) duplicateUnitAction {
+	switch {
+	case !inUser || !inSystem:
+		return duplicateNone
+	case root:
+		return duplicateRetireUser
+	default:
+		return duplicateWarn
+	}
+}
+
+// healDuplicateUnits resolves a bridge unit installed in both scopes before a
+// command starts the bridge or (re)installs the unit. It never removes the only
+// unit, and it reports what is actually left rather than assuming success.
+func healDuplicateUnits() {
+	if runtime.GOOS != "linux" {
+		return
+	}
+	unit := "corten-matrix.service"
+	userPath := filepath.Join(userUnitDir(effectiveHome()), unit)
+	_, statErr := os.Stat(userPath)
+	// Ask the filesystem too: with root's user manager not running (or out of
+	// reach) the probe fails, but a lingering manager would still start the
+	// unit at the next boot.
+	inUser := statErr == nil || (userBusReachable() && systemdUnitExists(true, unit))
+	inSystem := systemdUnitExists(false, unit)
+	root := os.Geteuid() == 0 && os.Getenv("SUDO_USER") == ""
+	switch decideDuplicateUnit(root, inUser, inSystem) {
+	case duplicateRetireUser:
+		_ = exec.Command("systemctl", "--user", "disable", "--now", unit).Run()
+		_ = os.Remove(userPath)
+		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+		_, statErr = os.Stat(userPath)
+		if statErr == nil || (userBusReachable() && systemdUnitExists(true, unit)) {
+			fmt.Printf("%s!%s corten-matrix is installed as both a system and a user service, and the user one\n", cRed, cReset)
+			fmt.Println("  could not be removed. Both run the bridge and knock each other off Beeper. Remove it with:")
+			fmt.Printf("  systemctl --user disable --now %s && rm -f %s\n", unit, userPath)
+			return
+		}
+		// The kept system unit may be a disabled leftover; enable it so the
+		// bridge still comes up at boot now that the user unit is gone.
+		_ = exec.Command("systemctl", "enable", unit).Run()
+		fmt.Printf("%s✓%s Removed a duplicate user-scope corten-matrix service (it ran a second copy of the bridge); kept the system service.\n", cGreen, cReset)
+	case duplicateWarn:
+		fmt.Printf("%s!%s corten-matrix is installed as both a system and a user service. Both run the bridge and\n", cRed, cReset)
+		fmt.Println("  knock each other off Beeper. Keep one; to remove the user one:")
+		fmt.Printf("  systemctl --user disable --now %s && rm -f %s\n", unit, userPath)
+		fmt.Println("  or the system one:")
+		fmt.Printf("  sudo systemctl disable --now %s && sudo rm -f /etc/systemd/system/%s\n", unit, unit)
+	}
+}
+
 // systemdUnitExists reports whether `unit` is installed in the given scope.
 // Probed with plain `systemctl` (never sudo): reading unit state needs no
 // privileges, and we must not prompt for a password just to locate a unit.
@@ -266,7 +366,22 @@ func serviceCtlOne(action, label string) error {
 	// linuxSystemctlFor for why the difference matters.
 	unit := label + ".service"
 	switch action {
-	case "start", "stop", "restart", "status":
+	case "stop":
+		// Stop it in every scope it's installed in: a duplicate left in the
+		// other scope would otherwise keep running the bridge after "stop".
+		base, system := linuxSystemctlFor(unit)
+		err := streamRun(base[0], append(append([]string{}, base[1:]...), action, unit)...)
+		if system && userBusReachable() && systemdUnitExists(true, unit) {
+			_ = streamRun("systemctl", "--user", action, unit)
+		} else if !system && systemdUnitExists(false, unit) {
+			sys := []string{"systemctl"}
+			if os.Geteuid() != 0 {
+				sys = []string{"sudo", "systemctl"}
+			}
+			_ = streamRun(sys[0], append(append([]string{}, sys[1:]...), action, unit)...)
+		}
+		return err
+	case "start", "restart", "status":
 		return sysctlUnit(action, unit)
 	}
 	return nil
@@ -380,6 +495,9 @@ func runSetup(beeper bool) {
 	}
 	// No mid-setup "add a second account?" prompt — a second bridge is added
 	// explicitly later with `setup 1` / `setup-beeper 1` (see reconfigureSecond).
+	// Again after the script: with root's user manager down it can't see a user
+	// unit left from an earlier setup, and installs a system unit beside it.
+	healDuplicateUnits()
 	startAfterSetup()
 	os.Exit(0)
 }
@@ -393,6 +511,7 @@ func reconfigureSecond(beeper bool) {
 	if err := setupAccount(beeper, 1); err != nil {
 		os.Exit(exitCodeOf(err))
 	}
+	healDuplicateUnits()
 	_ = serviceCtlOne("restart", serviceLabel(0)) // one service → both bridges (re)load
 	fmt.Printf("\n%s✓%s Second bridge ready.\n", cGreen, cReset)
 	os.Exit(0)
@@ -1146,6 +1265,11 @@ func IsManagementCommand(cmd string) bool {
 // runManagementCommand dispatches a host-management subcommand. It always
 // terminates the process (os.Exit) — it is only called for known commands.
 func RunManagement(cmd string, args []string) {
+	adoptUserBus()
+	switch cmd {
+	case "setup", "setup-beeper", "start", "restart", "install-service":
+		healDuplicateUnits()
+	}
 	switch cmd {
 	case "setup":
 		if len(args) > 0 && args[0] == "1" {
