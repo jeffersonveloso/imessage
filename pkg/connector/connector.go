@@ -40,7 +40,7 @@ func (c *IMConnector) GetName() bridgev2.BridgeName {
 		NetworkURL:           "https://support.apple.com/messages",
 		NetworkIcon:          "mxc://maunium.net/tManJEpANASZvDVzvRvhILdl",
 		NetworkID:            "imessage",
-		BeeperBridgeType:     "imessagego",
+		BeeperBridgeType:     "imessage",
 		DefaultPort:          29332,
 		DefaultCommandPrefix: "!im",
 	}
