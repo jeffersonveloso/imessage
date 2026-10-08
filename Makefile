@@ -240,7 +240,7 @@ ensure-rustpush-source:
 # sync_controller.go:3369) — without this they decode empty, land with
 # has_body=0, and ensureSchema's cleanup DELETEs them: silent history loss.
 	@$(RP_PATCH) rp_patch "decode msgType=0 as a message" $(RUSTPUSH_DIR)/src/imessage/cloud_messages.rs \
-	  's/^                1\.\.=2 => CloudMessageType::Message \{/                0..=2 => CloudMessageType::Message {/' \
+	  's/^                1\.\.=2 => CloudMessageType::Message \{[ \t]*$$/                0..=2 => CloudMessageType::Message {/' \
 	  '^                0\.\.=2 => CloudMessageType::Message \{'
 # ids_guard + the IDS query call sites use rustpush::ids::*.
 	@$(RP_PATCH) rp_patch "pub mod ids" $(RUSTPUSH_DIR)/src/lib.rs \
