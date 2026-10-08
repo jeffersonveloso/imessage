@@ -318,6 +318,12 @@ ensure-rustpush-source:
 	@$(RP_PATCH) rp_patch "keychain passcode_generation default" $(RUSTPUSH_DIR)/src/icloud/keychain.rs \
 	  's/^    pub passcode_generation: u32,$$/    #[serde(default)] pub passcode_generation: u32,/' \
 	  '#\[serde\(default\)\] pub passcode_generation: u32,'
+# Accept an escrow bottle whose peer-key signature does not verify when the
+# bottle's decrypted private keys are a genuine peer's permanent keys, and log
+# fingerprints when it is rejected. The release build lane carries the same diff.
+	@$(RP_PATCH) rp_apply "keychain recover bottle by held keys" $(RUSTPUSH_DIR) \
+	  third_party/patches/rustpush/recover-bottle-by-held-keys.patch \
+	  src/icloud/keychain.rs '^fn peer_holds_keys\('
 # Env-gated REGISTER body XML dump (StatusKit reliability diagnostic; ports
 # d77b1ac4). Off unless RUSTPUSH_LOG_REGISTER_BODY is set.
 	@$(RP_PATCH) rp_patch "REGISTER body XML dump" $(RUSTPUSH_DIR)/src/ids/user.rs \
