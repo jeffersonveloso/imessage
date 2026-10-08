@@ -3833,10 +3833,16 @@ fn message_inst_to_wrapped(msg: &MessageInst) -> WrappedMessage {
                             AttachmentType::Inline(data) => {
                                 (true, Some(data.clone()), data.len() as u64, None)
                             }
-                            AttachmentType::MMCS(mmcs) => {
-                                let descriptor = MmcsDescriptor::from_file(mmcs);
-                                let json = serde_json::to_string(&descriptor).ok();
-                                (false, None, mmcs.size as u64, json)
+                            // An MMCS attachment can carry several variants; the
+                            // biggest is the main file, as rustpush's own
+                            // Attachment::get_attachment picks it.
+                            AttachmentType::MMCS(mmcs) => match mmcs.iter().max_by_key(|m| m.size) {
+                                Some(main) => {
+                                    let descriptor = MmcsDescriptor::from_file(main);
+                                    let json = serde_json::to_string(&descriptor).ok();
+                                    (false, None, main.size as u64, json)
+                                }
+                                None => (false, None, 0, None),
                             }
                         };
                     w.attachments.push(WrappedAttachment {
@@ -5869,7 +5875,12 @@ async fn download_mmcs_attachments(
         let mut att_idx = 0;
         for indexed_part in &normal.parts.0 {
             if let MessagePart::Attachment(att) = &indexed_part.part {
-                if let AttachmentType::MMCS(mmcs) = &att.a_type {
+                if let AttachmentType::MMCS(variants) = &att.a_type {
+                    let Some(mmcs) = variants.iter().max_by_key(|m| m.size) else {
+                        warn!("MMCS attachment {} has no files", att.name);
+                        att_idx += 1;
+                        continue;
+                    };
                     if att_idx < wrapped.attachments.len() {
                         match download_one_mmcs_attachment(mmcs, conn, &att.name).await {
                             Ok(buf) => {
@@ -6049,7 +6060,7 @@ async fn download_icon_change_photo(
     if let Message::IconChange(change) = &msg_inst.message {
         if let Some(mmcs_file) = &change.file {
             let att = Attachment {
-                a_type: AttachmentType::MMCS(mmcs_file.clone()),
+                a_type: AttachmentType::MMCS(vec![mmcs_file.clone()]),
                 part: 0,
                 uti_type: String::new(),
                 mime: String::from("image/jpeg"),
