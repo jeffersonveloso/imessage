@@ -1605,12 +1605,12 @@ async fn join_keychain_with_bottles(
                     // already accepted: the bottle's escrow-key or peer-key
                     // signature, or a trust record of the device that made
                     // it. A peer ID is the hash of its signing key, so this is
-                    // not the device having re-keyed. (Shared-key signatures
-                    // used to land here too, before the TLK share patch.)
+                    // not the device having re-keyed. It can also be a TLK
+                    // share signature in fetch_shares_for.
                     if matches!(e, rustpush::PushError::BadMsg) {
                         warn!(
                             "Bottle {} (serial={}, build={}): the passcode was accepted, but a \
-                             signature in the bottle or its device's trust record did not verify.",
+                             signature in the bottle, its device's trust record, or a shared key did not verify.",
                             i, meta.serial, meta.build
                         );
                     } else {

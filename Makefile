@@ -318,13 +318,6 @@ ensure-rustpush-source:
 	@$(RP_PATCH) rp_patch "keychain passcode_generation default" $(RUSTPUSH_DIR)/src/icloud/keychain.rs \
 	  's/^    pub passcode_generation: u32,$$/    #[serde(default)] pub passcode_generation: u32,/' \
 	  '#\[serde\(default\)\] pub passcode_generation: u32,'
-# Verify TLK share signatures over Apple's extra signed record fields
-# (tlkOwnershipProof on macOS/iOS 27) and skip a share that still fails,
-# instead of aborting the whole escrow join; ports OpenBubbles/rustpush#34.
-# The release build lane carries the same diff.
-	@$(RP_PATCH) rp_apply "keychain TLK share extra signed fields" $(RUSTPUSH_DIR) \
-	  third_party/patches/rustpush/verify-tlkshare-extra-signed-fields.patch \
-	  src/icloud/keychain.rs '^    fn signing_payloads\(&self, fields: &\[Field\]\)'
 # Env-gated REGISTER body XML dump (StatusKit reliability diagnostic; ports
 # d77b1ac4). Off unless RUSTPUSH_LOG_REGISTER_BODY is set.
 	@$(RP_PATCH) rp_patch "REGISTER body XML dump" $(RUSTPUSH_DIR)/src/ids/user.rs \
