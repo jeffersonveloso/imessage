@@ -5460,7 +5460,9 @@ impl LoginSession {
 
         // SMS (secondaryAuth) accounts must verify via verify_sms_2fa with the body
         // captured at login_start; trusted-device accounts use verify_2fa.
-        let sms_body = self.sms_verify_body.lock().unwrap().take();
+        // Clone rather than take so a mistyped code can be retried on the same
+        // session instead of falling through to verify_2fa.
+        let sms_body = self.sms_verify_body.lock().unwrap().clone();
         let result = if let Some(body) = sms_body {
             info!("Verifying 2FA code via SMS securitycode endpoint (verify_sms_2fa)");
             account.verify_sms_2fa(code, body).await
