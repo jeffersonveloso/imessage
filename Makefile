@@ -337,11 +337,6 @@ ensure-rustpush-source:
 	@$(RP_PATCH) rp_patch "recover bottle: identity from chosen peer" $(RUSTPUSH_DIR)/src/icloud/keychain.rs \
 	  's#^            identifier: outer_bottle\.peer_id\(\)\.to_string\(\),$$#            identifier,#; s#^            signing_key: SoftEcKey\(ec_key_from_apple\(decoded\.signing_key\..*$$#            signing_key: SoftEcKey(signing_key),#; s#^            encryption_key: SoftEcKey\(ec_key_from_apple\(decoded\.encryption_key\..*$$#            encryption_key: SoftEcKey(encryption_key),#' \
 	  '^            signing_key: SoftEcKey\(signing_key\),'
-# Env-gated REGISTER body XML dump (StatusKit reliability diagnostic; ports
-# d77b1ac4). Off unless RUSTPUSH_LOG_REGISTER_BODY is set.
-	@$(RP_PATCH) rp_patch "REGISTER body XML dump" $(RUSTPUSH_DIR)/src/ids/user.rs \
-	  's/^    let mut request = SignedRequest::new\("id-register", Method::POST\)$$/    if std::env::var("RUSTPUSH_LOG_REGISTER_BODY").is_ok() { info!("REGISTER body XML: {}", plist_to_string(&body).unwrap_or_default()); } let mut request = SignedRequest::new("id-register", Method::POST)/' \
-	  'RUSTPUSH_LOG_REGISTER_BODY'
 # Soften statuskit.rs:119 panic to warn + default APSChannel (StatusKit reliability).
 	@$(RP_PATCH) rp_patch "statuskit no-saved-channel panic" $(RUSTPUSH_DIR)/src/statuskit.rs \
 	  's/            panic!\("No saved channel for identifier!"\)$$/            warn!("StatusKit: no saved channel for identifier — using last_msg_ns=0 (will replay)"); return APSChannel { identifier: channel.clone(), last_msg_ns: 0, subscribe: join };/' \
