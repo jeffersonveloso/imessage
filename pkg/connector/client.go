@@ -1080,13 +1080,14 @@ func safeLoginStart(
 	username, password string,
 	config *rustpushgo.WrappedOsConfig,
 	conn *rustpushgo.WrappedApsConnection,
+	preferSMS bool,
 ) (session *rustpushgo.LoginSession, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("LoginStart panicked: %v", r)
 		}
 	}()
-	return rustpushgo.LoginStart(username, password, config, conn)
+	return rustpushgo.LoginStart(username, password, config, conn, preferSMS)
 }
 
 func safeSubmit2fa(session *rustpushgo.LoginSession, code string) (ok bool, err error) {

@@ -5328,6 +5328,7 @@ pub async fn login_start(
     password: String,
     config: &WrappedOSConfig,
     connection: &WrappedAPSConnection,
+    prefer_sms: bool,
 ) -> Result<Arc<LoginSession>, WrappedError> {
     ensure_crypto_provider();
     let os_config = config.config.clone();
@@ -5395,13 +5396,24 @@ pub async fn login_start(
         }
         icloud_auth::LoginState::Needs2FAVerification => {
             info!("2FA required (Needs2FAVerification — push already sent by Apple)");
+            if prefer_sms {
+                sms_verify_body = request_sms_2fa(&account).await;
+            }
             true
         }
         icloud_auth::LoginState::NeedsDevice2FA => {
-            info!("Trusted-device 2FA — sending device push (verified via verify_2fa)");
-            match account.send_2fa_to_devices().await {
-                Ok(_) => info!("send_2fa_to_devices succeeded"),
-                Err(e) => error!("send_2fa_to_devices failed: {}", e),
+            // The user asked for an SMS code: text it instead of pushing to devices,
+            // falling back to the push if the SMS request fails. A failed login step
+            // would discard the whole login, so never return an error here.
+            if prefer_sms {
+                sms_verify_body = request_sms_2fa(&account).await;
+            }
+            if sms_verify_body.is_none() {
+                info!("Trusted-device 2FA — sending device push (verified via verify_2fa)");
+                match account.send_2fa_to_devices().await {
+                    Ok(_) => info!("send_2fa_to_devices succeeded"),
+                    Err(e) => error!("send_2fa_to_devices failed: {}", e),
+                }
             }
             true
         }
@@ -5409,15 +5421,7 @@ pub async fn login_start(
             // secondaryAuth account: the trusted-device verify (verify_2fa) accepts the
             // code but does NOT satisfy secondaryAuth (re-login loops). We must request an
             // SMS and verify via verify_sms_2fa with the returned body.
-            info!("SMS (secondaryAuth) 2FA — requesting code to trusted phone 1");
-            match account.send_sms_2fa_to_devices(1).await {
-                Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
-                    info!("SMS 2FA code sent; awaiting code");
-                    sms_verify_body = Some(body);
-                }
-                Ok(other) => error!("send_sms_2fa_to_devices: unexpected state {:?}", other),
-                Err(e) => error!("send_sms_2fa_to_devices failed: {}", e),
-            }
+            sms_verify_body = request_sms_2fa(&account).await;
             true
         }
         icloud_auth::LoginState::NeedsSMS2FAVerification(body) => {
@@ -5448,10 +5452,35 @@ pub async fn login_start(
     }))
 }
 
+/// Text a 2FA code to trusted phone 1 and return the verify body that
+/// submit_2fa hands to verify_sms_2fa, or None if the request failed.
+async fn request_sms_2fa(account: &AppleAccount<BridgeDefaultAnisetteProvider>) -> Option<icloud_auth::VerifyBody> {
+    info!("SMS 2FA — requesting code to trusted phone 1");
+    match account.send_sms_2fa_to_devices(1).await {
+        Ok(icloud_auth::LoginState::NeedsSMS2FAVerification(body)) => {
+            info!("SMS 2FA code sent; awaiting code");
+            Some(body)
+        }
+        Ok(other) => {
+            error!("send_sms_2fa_to_devices: unexpected state {:?}", other);
+            None
+        }
+        Err(e) => {
+            error!("send_sms_2fa_to_devices failed: {}", e);
+            None
+        }
+    }
+}
+
 #[uniffi::export(async_runtime = "tokio")]
 impl LoginSession {
     pub fn needs_2fa(&self) -> bool {
         self.needs_2fa
+    }
+
+    /// Whether the 2FA code was texted (SMS) rather than pushed to trusted devices.
+    pub fn sms_2fa_sent(&self) -> bool {
+        self.sms_verify_body.lock().unwrap().is_some()
     }
 
     pub async fn submit_2fa(&self, code: String) -> Result<bool, WrappedError> {

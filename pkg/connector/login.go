@@ -121,7 +121,7 @@ func (l *AppleIDLogin) SubmitUserInput(ctx context.Context, input map[string]str
 		}
 		l.username = username
 
-		session, err := safeLoginStart(username, password, l.cfg, l.conn)
+		session, err := safeLoginStart(username, password, l.cfg, l.conn, false)
 		if err != nil {
 			l.Main.Bridge.Log.Error().Err(err).Str("username", username).Msg("Login failed")
 			return nil, fmt.Errorf("login failed: %w", err)
@@ -342,15 +342,7 @@ func (l *ExternalKeyLogin) SubmitUserInput(ctx context.Context, input map[string
 			StepID:       LoginStepAppleIDPassword,
 			Instructions: "Enter your Apple ID credentials.\n" + nacNote,
 			UserInputParams: &bridgev2.LoginUserInputParams{
-				Fields: []bridgev2.LoginInputDataField{{
-					Type: bridgev2.LoginInputFieldTypeEmail,
-					ID:   "username",
-					Name: "Apple ID",
-				}, {
-					Type: bridgev2.LoginInputFieldTypePassword,
-					ID:   "password",
-					Name: "Password",
-				}},
+				Fields: appleIDCredentialFields(!isRunningOnMacOS()),
 			},
 		}, nil
 	}
@@ -367,7 +359,8 @@ func (l *ExternalKeyLogin) SubmitUserInput(ctx context.Context, input map[string
 		}
 		l.username = username
 
-		session, err := safeLoginStart(username, password, l.cfg, l.conn)
+		preferSMS := !isRunningOnMacOS() && wantsSMS2FA(input["sms_2fa"])
+		session, err := safeLoginStart(username, password, l.cfg, l.conn, preferSMS)
 		if err != nil {
 			l.Main.Bridge.Log.Error().Err(err).Str("username", username).Msg("Login failed")
 			return nil, fmt.Errorf("login failed: %w", err)
@@ -375,12 +368,17 @@ func (l *ExternalKeyLogin) SubmitUserInput(ctx context.Context, input map[string
 		l.session = session
 
 		if session.Needs2fa() {
-			l.Main.Bridge.Log.Info().Str("username", username).Msg("Login succeeded, waiting for 2FA")
+			l.Main.Bridge.Log.Info().Str("username", username).Bool("sms", session.Sms2faSent()).Msg("Login succeeded, waiting for 2FA")
+			where := "You may see a notification on your trusted Apple devices."
+			if session.Sms2faSent() {
+				where = "A code was sent to your trusted phone number by SMS."
+			} else if preferSMS {
+				where = "The SMS code couldn't be requested, so check your trusted Apple devices instead."
+			}
 			return &bridgev2.LoginStep{
-				Type:   bridgev2.LoginStepTypeUserInput,
-				StepID: LoginStepTwoFactor,
-				Instructions: "Enter your Apple ID verification code.\n\n" +
-					"You may see a notification on your trusted Apple devices.",
+				Type:         bridgev2.LoginStepTypeUserInput,
+				StepID:       LoginStepTwoFactor,
+				Instructions: "Enter your Apple ID verification code.\n\n" + where,
 				UserInputParams: &bridgev2.LoginUserInputParams{
 					Fields: []bridgev2.LoginInputDataField{{
 						ID:   "code",
@@ -933,4 +931,46 @@ func completeLoginWithMeta(
 			UserLogin:   ul,
 		},
 	}, nil
+}
+
+// appleIDCredentialFields returns the Apple ID + password form, plus the
+// "send the 2FA code by SMS?" question when askSMS is set. It's asked up front
+// because the trusted-device push goes out as soon as the credentials are
+// submitted.
+func appleIDCredentialFields(askSMS bool) []bridgev2.LoginInputDataField {
+	fields := []bridgev2.LoginInputDataField{{
+		Type: bridgev2.LoginInputFieldTypeEmail,
+		ID:   "username",
+		Name: "Apple ID",
+	}, {
+		Type: bridgev2.LoginInputFieldTypePassword,
+		ID:   "password",
+		Name: "Password",
+	}}
+	if askSMS {
+		// A plain text field rather than a select: a select renders as a
+		// numbered menu in the terminal login, which reads badly for a y/n.
+		fields = append(fields, bridgev2.LoginInputDataField{
+			ID:           "sms_2fa",
+			Name:         "Send 2FA code by SMS? (y/n)",
+			Description:  "y texts the code to your trusted phone number; n sends it to your Apple devices.",
+			DefaultValue: "n",
+			Pattern:      "^([yYnN]|[yY][eE][sS]|[nN][oO])?$",
+			Validate: func(s string) (string, error) {
+				switch strings.ToLower(strings.TrimSpace(s)) {
+				case "", "n", "no":
+					return "n", nil
+				case "y", "yes":
+					return "y", nil
+				}
+				return "", fmt.Errorf("answer y or n")
+			},
+		})
+	}
+	return fields
+}
+
+func wantsSMS2FA(answer string) bool {
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "y" || answer == "yes"
 }
