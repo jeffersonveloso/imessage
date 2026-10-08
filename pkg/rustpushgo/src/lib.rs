@@ -1542,11 +1542,17 @@ async fn join_keychain_with_bottles(
     let passcode_bytes = passcode.as_bytes();
     let mut last_err = String::new();
 
-    // Build iteration order: preferred bottle first (if specified), then the rest.
+    // Build iteration order: preferred bottle first (if specified), then only
+    // the other bottles from that same device. The passcode belongs to the
+    // chosen device; offering it to another device's escrow record is a wrong
+    // SRP proof that spends one of that record's limited recovery attempts
+    // and buries the chosen bottle's real error under "-6015 Credential is
+    // not verified".
     let indices: Vec<usize> = if let Some(pref) = preferred_index {
         let pref = pref as usize;
+        let serial = &bottles[pref].1.serial;
         let mut order = vec![pref];
-        order.extend((0..bottles.len()).filter(|&i| i != pref));
+        order.extend((0..bottles.len()).filter(|&i| i != pref && &bottles[i].1.serial == serial));
         order
     } else {
         (0..bottles.len()).collect()
@@ -1594,23 +1600,17 @@ async fn join_keychain_with_bottles(
                     }
                 }
                 Err(e) => {
-                    // A BadMsg here is the escrow record's peer-key signature
-                    // failing to verify against that peer's CURRENT signing key
-                    // (rustpush keychain.rs, verify_signature on the outer
-                    // bottle). It means the device re-keyed after this record
-                    // was written — a macOS/iOS major upgrade, a re-enrollment,
-                    // or an earlier bridge install that has since generated a
-                    // fresh identity. Such a record can never open again, and
-                    // Apple keeps serving it, so this is expected on accounts
-                    // with any device history. Say so, rather than leaving a
-                    // bare "Bad message" that reads like the login broke.
+                    // A BadMsg here is a signature check inside
+                    // join_clique_from_escrow failing after the passcode was
+                    // already accepted: the bottle's escrow-key or peer-key
+                    // signature, or a trust record of the device that made
+                    // it. A peer ID is the hash of its signing key, so this is
+                    // not the device having re-keyed. (Shared-key signatures
+                    // used to land here too, before the TLK share patch.)
                     if matches!(e, rustpush::PushError::BadMsg) {
                         warn!(
-                            "Bottle {} (serial={}, build={}) has a stale signature — that device \
-                             re-keyed after this escrow record was written (OS upgrade, \
-                             re-enrollment, or an earlier bridge install), so it can never be \
-                             opened. Skipping to the next bottle; this is not a failure as long \
-                             as a later one succeeds.",
+                            "Bottle {} (serial={}, build={}): the passcode was accepted, but a \
+                             signature in the bottle or its device's trust record did not verify.",
                             i, meta.serial, meta.build
                         );
                     } else {
