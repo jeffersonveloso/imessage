@@ -1501,7 +1501,7 @@ async fn create_keychain_clients(
             if let Err(e) = plist::to_file_xml(&path_for_closure, state) {
                 warn!("Failed to persist keychain state to {}: {}", path_for_closure, e);
             } else {
-                info!("Persisted keychain state to {}", path_for_closure);
+                debug!("Persisted keychain state to {}", path_for_closure);
             }
         }),
         container: tokio::sync::Mutex::new(None),
@@ -5343,23 +5343,22 @@ pub async fn login_start(
         hasher.finalize().to_vec()
     };
     {
-        // Diagnostic: confirm the password reaching us is the raw user password and
-        // not HTML/markdown-escaped or truncated by the matrix input layer. Compare
-        // pw_sha256 to `printf %s 'yourpassword' | shasum -a 256` to verify.
+        // The Matrix input layer has delivered HTML-escaped passwords before. The
+        // SHA-256 above is what GSA SRP takes as the password, so it is never logged.
         let tp = password.trim();
         let html_escaped = tp.contains("&amp;") || tp.contains("&lt;") || tp.contains("&gt;")
             || tp.contains("&quot;") || tp.contains("&#") || tp.contains("&apos;");
-        let pw_hex: String = pw_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-        info!("LOGIN-DEBUG user={:?} user_len={} pw_raw_bytes={} pw_trim_chars={} pw_trim_bytes={} pw_html_escaped={} pw_sha256={}",
-            user_trimmed, user_trimmed.len(), password.len(), tp.chars().count(), tp.len(), html_escaped, pw_hex);
+        if html_escaped {
+            warn!("login_start: the password looks HTML-escaped; if login fails, the Matrix client may have mangled it");
+        }
     }
 
     let client_info = os_config.get_gsa_config(&*conn.state.read().await, false);
     info!("login_start: mme_client_info={}", client_info.mme_client_info);
     info!("login_start: mme_client_info_akd={}", client_info.mme_client_info_akd);
     info!("login_start: akd_user_agent={}", client_info.akd_user_agent);
-    info!("login_start: hardware_headers={:?}", client_info.hardware_headers);
-    info!("login_start: push_token={:?}", client_info.push_token);
+    debug!("login_start: hardware_headers={:?}", client_info.hardware_headers);
+    debug!("login_start: push_token={:?}", client_info.push_token);
     // Persist the provisioned ADI machine in the absolute XDG data dir (same place
     // every other subsystem uses), NOT a cwd-relative path. With the relative
     // "state/anisette" the machine was re-provisioned on every login (state.plist
@@ -5377,7 +5376,7 @@ pub async fn login_start(
     let mut account = AppleAccount::new_with_anisette(client_info, anisette, None, update_persist)
         .map_err(|e| WrappedError::GenericError { msg: format!("Failed to create account: {}", e) })?;
 
-    info!("login_start: calling login_email_pass for {}", user_trimmed);
+    info!("login_start: calling login_email_pass");
     // The clean-room now registers as a phantom Mac (synthetic identity), so the
     // GSA init no longer presents a clone of a live Mac and the -22421 native-sync
     // challenge should not fire. The old capture-SIM + anisette-sync + retry dance
