@@ -235,6 +235,22 @@ ensure-rustpush-source:
 	@$(RP_PATCH) rp_patch "omnisette prefer-* no-op features" $(APA_DIR)/omnisette/Cargo.toml \
 	  's/^(remote-clearadi = .*)$$/$$1\nprefer-aoskit = []\nprefer-remote-anisette-v3 = []/' \
 	  '^prefer-aoskit'
+# Remote anisette v3: the provisioning websocket can answer {"result":"Timeout"},
+# which upstream fails to deserialize, and a get_headers error other than
+# AnisetteNotProvisioned hits a bare panic!() that unwinds through the Go host.
+# Handle Timeout as a provisioning error and propagate the original error.
+	@$(RP_PATCH) rp_patch "anisette v3: AnisetteProvisioningError" $(APA_DIR)/omnisette/src/lib.rs \
+	  's/^    Anyhow\(#\[from\] anyhow::Error\)$$/    Anyhow(#[from] anyhow::Error),\n    #[error("Provisioning error: {0}")]\n    AnisetteProvisioningError(String),/' \
+	  '^    AnisetteProvisioningError\(String\),'
+	@$(RP_PATCH) rp_patch "anisette v3: Timeout variant" $(APA_DIR)/omnisette/src/remote_anisette_v3.rs \
+	  'if (/^                adi_pb: String$$/) { $$rp_seen = 1 } elsif ($$rp_seen && s/^            \}$$/            },\n            Timeout,/) { $$rp_seen = 0 }' \
+	  '^            Timeout,$$'
+	@$(RP_PATCH) rp_patch "anisette v3: handle Timeout" $(APA_DIR)/omnisette/src/remote_anisette_v3.rs \
+	  's/^(                    ProvisionInput::ProvisioningSuccess \{ adi_pb \} => \{)$$/                    ProvisionInput::Timeout => {\n                        connection.close(None).await.ok();\n                        return Err(AnisetteError::AnisetteProvisioningError("Remote anisette server timed out during provisioning".to_string()));\n                    },\n$$1/' \
+	  'ProvisionInput::Timeout => \{'
+	@$(RP_PATCH) rp_patch "anisette v3: propagate get_headers error" $(APA_DIR)/omnisette/src/remote_anisette_v3.rs \
+	  's/\} else \{ panic!\(\) \}/} else { return Err(err) }/' \
+	  '\} else \{ return Err\(err\) \}'
 # Upstream gates the proto decode on msgType 1..=2 and throws the payload away
 # for anything else. Real user messages arrive from CloudKit as msgType 0 (see
 # sync_controller.go:3369) — without this they decode empty, land with
