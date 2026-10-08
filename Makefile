@@ -23,11 +23,6 @@ APA_DIR      := $(RUSTPUSH_DIR)/third_party/apple-private-apis
 RUSTPUSH_PIN_FILE := third_party/rustpush-upstream.sha
 RUSTPUSH_PIN      := $(shell cat $(RUSTPUSH_PIN_FILE) 2>/dev/null)
 RUSTPUSH_SRC:= $(shell find $(RUSTPUSH_DIR)/src $(APA_DIR) $(RUSTPUSH_DIR)/open-absinthe/src -name '*.rs' -o -name '*.s' 2>/dev/null) $(wildcard $(RUSTPUSH_DIR)/open-absinthe/build.rs)
-# Patches applied to the pinned tree by ensure-rustpush-source. They and this
-# Makefile are prerequisites of the Rust archive because make stats the tree's
-# .rs files before that recipe patches them: a patch that lands during the run
-# would otherwise not rebuild the archive until the next invocation.
-PATCH_FILES := $(shell find third_party/patches -name '*.patch' 2>/dev/null)
 CARGO_FILES := $(shell find . -name 'Cargo.toml' -o -name 'Cargo.lock' 2>/dev/null | grep -v target)
 GO_SRC      := $(shell find pkg/ cmd/ -name '*.go' 2>/dev/null)
 
@@ -159,15 +154,10 @@ FAIRPLAY_CERTS := 4056631661436364584235346952193 \
 # patches into no-ops with no output at all. Anything that does not land now
 # stops the build and names the patch.
 #
-# Changes too large for a substitution live as unified diffs under
-# third_party/patches/ and go through rp_apply, which proves the same end state
-# with the same three outcomes, using the complete patch as the test:
-#
-#   rp_apply <label> <apply-root> <patch-file> <verify-file-relative-to-root> <verify-ere>
-#
-#   patch reverse-applies and marker present -> skip  (already adopted upstream)
-#   marker present but patch does not reverse-apply -> FAIL (partial tree; reset it)
-#   otherwise `git apply --check`, apply, marker must appear -> else FAIL
+# Every source-build patch lives here, inline. A multi-line change is a perl
+# range (`if (/start/ .. /end/) { ... }`) that replaces the block; there are
+# no patch files. The release lane (OpenCider) carries the same changes as
+# .patch files, and both must produce the same tree.
 RP_PATCH = rp_patch() { \
 	  rp_label="$$1"; rp_file="$$2"; rp_expr="$$3"; rp_verify="$$4"; \
 	  if [ ! -f "$$rp_file" ]; then \
@@ -182,39 +172,6 @@ RP_PATCH = rp_patch() { \
 	    || { echo "error: rustpush patch '$$rp_label': perl failed on $$rp_file" >&2; return 1; }; \
 	  if ! grep -qE "$$rp_verify" "$$rp_file"; then \
 	    echo "error: rustpush patch '$$rp_label' did not apply to $$rp_file — the anchor no longer matches upstream" >&2; \
-	    return 1; \
-	  fi; \
-	  echo "  patch $$rp_label"; \
-	}; \
-	rp_apply() { \
-	  rp_label="$$1"; rp_root="$$2"; rp_file="$$3"; rp_target="$$2/$$4"; rp_verify="$$5"; \
-	  case "$$rp_file" in /*) ;; *) rp_file="$$PWD/$$rp_file" ;; esac; \
-	  if [ ! -f "$$rp_file" ]; then \
-	    echo "error: rustpush patch '$$rp_label': patch file missing: $$rp_file" >&2; \
-	    return 1; \
-	  fi; \
-	  if [ ! -f "$$rp_target" ]; then \
-	    echo "error: rustpush patch '$$rp_label': target file missing: $$rp_target (did upstream move it?)" >&2; \
-	    return 1; \
-	  fi; \
-	  if git -C "$$rp_root" apply --reverse --unidiff-zero --whitespace=fix --check "$$rp_file" >/dev/null 2>&1; then \
-	    if ! grep -qE "$$rp_verify" "$$rp_target"; then \
-	      echo "error: rustpush patch '$$rp_label' is fully present but its end-state marker is absent from $$rp_target" >&2; \
-	      return 1; \
-	    fi; \
-	    echo "  patch $$rp_label (already satisfied upstream)"; \
-	    return 0; \
-	  fi; \
-	  if grep -qE "$$rp_verify" "$$rp_target"; then \
-	    echo "error: rustpush patch '$$rp_label' is only partly present in $$rp_root — delete $(RUSTPUSH_DIR) and rebuild" >&2; \
-	    return 1; \
-	  fi; \
-	  git -C "$$rp_root" apply --unidiff-zero --whitespace=fix --check "$$rp_file" \
-	    || { echo "error: rustpush patch '$$rp_label' does not apply to the pinned tree — refresh $$rp_file" >&2; return 1; }; \
-	  git -C "$$rp_root" apply --unidiff-zero --whitespace=fix "$$rp_file" \
-	    || { echo "error: rustpush patch '$$rp_label' failed after a successful preflight" >&2; return 1; }; \
-	  if ! grep -qE "$$rp_verify" "$$rp_target"; then \
-	    echo "error: rustpush patch '$$rp_label' applied but did not produce its end state in $$rp_target" >&2; \
 	    return 1; \
 	  fi; \
 	  echo "  patch $$rp_label"; \
@@ -304,11 +261,23 @@ ensure-rustpush-source:
 # every X-Apple-GS/HB/PE-Token header, and reads the HB expiry as now plus a
 # raw epoch-millisecond value. One fallible parser turns a malformed header
 # into Error::BadTokenHeader instead of a panic that unwinds through the Go
-# host. Too large for a substitution; the release build lane carries the same
-# diff. Applied after the two field patches above, which it does not touch.
-	@$(RP_PATCH) rp_apply "fallible GSA token header parsing" $(APA_DIR) \
-	  third_party/patches/apple-private-apis/fallible-gsa-token-header-parsing.patch \
-	  icloud-auth/src/client.rs '^fn parse_token_header\('
+# host. Same end state as OpenCider's fallible-gsa-token-header-parsing.patch.
+# Each multi-line block is replaced with a perl range (start .. end line).
+	@$(RP_PATCH) rp_patch "GSA token header: BadTokenHeader error" $(APA_DIR)/icloud-auth/src/lib.rs \
+	  's/^(    BadSpd\(String\),\n)/$$1    #[error("Bad GSA token header: {0}")]\n    BadTokenHeader(String),\n/' \
+	  '^    BadTokenHeader\(String\),'
+	@$(RP_PATCH) rp_patch "GSA token header: fallible parser" $(APA_DIR)/icloud-auth/src/client.rs \
+	  'if (/^    fn parse_pet_header\(&mut self, data: &str\) \{$$/ .. /^\}$$/) { $$_ = /^    fn parse_pet_header/ ? qq~    fn parse_pet_header(&mut self, data: &str) -> Result<(), Error> {\n        let (_, token) = parse_token_header(data, 300)?;\n        self.tokens.insert("com.apple.gs.idms.pet".to_string(), token);\n        Ok(())\n    }\n\n    fn parse_hb_header(&mut self, data: &str) -> Result<(), Error> {\n        let (_, token) = parse_token_header(data, 300)?;\n        self.tokens.insert("com.apple.gs.idms.hb".to_string(), token);\n        Ok(())\n    }\n}\n\n/// Parse one base64 `ID:TOKEN[:DURATION][:EXPIRATION]` GSA token header into\n/// its ID and token. Apple mixes seconds-from-now and milliseconds-since-epoch\n/// in the trailing field (the SMS 2FA endpoint appends both), so the last\n/// numeric field wins and anything above 40 years of milliseconds is read as\n/// an absolute time. A missing field falls back to `default_secs` from now.\n/// A malformed header is an error, never a panic: a surprising response must\n/// fail the login step, not unwind through the host application.\nfn parse_token_header(data: &str, default_secs: u64) -> Result<(String, FetchedToken), Error> {\n    let decoded = base64::decode(data).map_err(|_| Error::BadTokenHeader("not base64".to_string()))?;\n    let decoded = String::from_utf8(decoded).map_err(|_| Error::BadTokenHeader("not UTF-8".to_string()))?;\n    let parts = decoded.split(\x27:\x27).collect::<Vec<&str>>();\n    let (Some(id), Some(token)) = (parts.first(), parts.get(1)) else {\n        return Err(Error::BadTokenHeader("missing token field".to_string()));\n    };\n    if id.is_empty() || token.is_empty() {\n        return Err(Error::BadTokenHeader("empty id or token field".to_string()));\n    }\n    let expiration = match parts.get(3).or(parts.get(2)) {\n        Some(raw) => {\n            let value = raw.trim().parse::<u64>()\n                .map_err(|_| Error::BadTokenHeader("expiration is not a number".to_string()))?;\n            if value > 40 * 365 * 24 * 60 * 60 * 1000 {\n                // ms since epoch\n                SystemTime::UNIX_EPOCH.checked_add(Duration::from_millis(value))\n            } else {\n                SystemTime::now().checked_add(Duration::from_secs(value))\n            }\n        }\n        None => SystemTime::now().checked_add(Duration::from_secs(default_secs)),\n    }\n    .ok_or_else(|| Error::BadTokenHeader("expiration out of range".to_string()))?;\n    Ok((id.to_string(), FetchedToken { token: token.to_string(), expiration }))\n}\n\nfn header_str(value: &HeaderValue) -> Result<&str, Error> {\n    value.to_str().map_err(|_| Error::BadTokenHeader("header is not visible ASCII".to_string()))\n}\n~ : "" }' \
+	  '^fn parse_token_header\('
+	@$(RP_PATCH) rp_patch "GSA token header: login tokens" $(APA_DIR)/icloud-auth/src/client.rs \
+	  'if (/^        account\.tokens = headers\.get_all\("X-Apple-GS-Token"\).*\.map\(\|header\| \{$$/ .. /^        \}\)\.collect\(\);$$/) { $$_ = /^        account\.tokens/ ? qq~        account.tokens = headers.get_all("X-Apple-GS-Token").iter().chain(headers.get_all("X-Apple-HB-Token").iter())\n            .map(|header| parse_token_header(header_str(header)?, 31536000))\n            .collect::<Result<HashMap<_, _>, Error>>()?;\n~ : "" }' \
+	  '^        account\.tokens = headers\.get_all\("X-Apple-GS-Token"\)\.iter\(\)\.chain\(headers\.get_all\("X-Apple-HB-Token"\)\.iter\(\)\)$$'
+	@$(RP_PATCH) rp_patch "GSA token header: 2FA tokens" $(APA_DIR)/icloud-auth/src/client.rs \
+	  'if (/^        account\.tokens = res\.headers\(\)\.get_all\("X-Apple-GS-Token"\).*\.map\(\|header\| \{$$/ .. /^        \}\)\.collect\(\);$$/) { $$_ = /^        account\.tokens/ ? qq~        // default one year; this won\x27t bite me in the back at all...\n        account.tokens = res.headers().get_all("X-Apple-GS-Token").iter().chain(res.headers().get_all("X-Apple-HB-Token").iter())\n            .map(|header| parse_token_header(header_str(header)?, 31536000))\n            .collect::<Result<HashMap<_, _>, Error>>()?;\n~ : "" }' \
+	  '^        account\.tokens = res\.headers\(\)\.get_all\("X-Apple-GS-Token"\)\.iter\(\)\.chain\(res\.headers\(\)\.get_all\("X-Apple-HB-Token"\)\.iter\(\)\)$$'
+	@$(RP_PATCH) rp_patch "GSA token header: HB and PET headers" $(APA_DIR)/icloud-auth/src/client.rs \
+	  's/^(\s+)account\.parse_(hb|pet)_header\((hb|pet)\.to_str\(\)\.unwrap\(\)\);$$/$$1account.parse_$$2_header(header_str($$3)?)?;/' \
+	  'account\.parse_pet_header\(header_str\(pet\)\?\)\?;'
 # Ignore self-exclusion in fast_forward_trust (Clique self-eviction fix; ports 9f29ff1).
 	@$(RP_PATCH) rp_patch "keychain self-exclusion" $(RUSTPUSH_DIR)/src/icloud/keychain.rs \
 	  's/^            for excluded in &trust\.excludeds \{$$/            let my_id = &state.user_identity.as_ref().unwrap().identifier;\n            for excluded in &trust.excludeds {\n                if excluded == my_id {\n                    warn!(\n                        "Ignoring exclusion of ourselves ({}) from peer {}",\n                        excluded,\n                        peer.0.hash.as_ref().unwrap()\n                    );\n                    continue;\n                }/' \
@@ -392,7 +361,7 @@ ensure-rustpush-source:
 # timestamp doesn't force $(RUST_LIB) to rebuild on every `make` invocation.
 # Only actual Rust source changes / Cargo.toml changes should trigger a
 # rebuild; the pinned SHA + submodule setup is idempotent once done.
-$(RUST_LIB): $(RUST_SRC) $(RUSTPUSH_SRC) $(CARGO_FILES) $(PATCH_FILES) Makefile | ensure-rustpush-source
+$(RUST_LIB): $(RUST_SRC) $(RUSTPUSH_SRC) $(CARGO_FILES) Makefile | ensure-rustpush-source
 	cd pkg/rustpushgo && $(CARGO_ENV) cargo build --release $(CARGO_FEATURES)
 	cp pkg/rustpushgo/target/release/librustpushgo.a .
 
