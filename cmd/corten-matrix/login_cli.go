@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
 	"maunium.net/go/mautrix/id"
@@ -24,7 +25,19 @@ import (
 // input is piped rather than typed interactively).
 var stdinReader = bufio.NewReader(os.Stdin)
 
+// muteInfoLogs raises the global log level to warn until the returned func is
+// called. Background info logs (e.g. the APNs keepalive) otherwise land in the
+// middle of a prompt while it waits for input.
+func muteInfoLogs() (restore func()) {
+	prev := zerolog.GlobalLevel()
+	if prev < zerolog.WarnLevel {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	}
+	return func() { zerolog.SetGlobalLevel(prev) }
+}
+
 func prompt(label string) string {
+	defer muteInfoLogs()()
 	fmt.Fprintf(os.Stderr, "%s: ", label)
 	line, _ := stdinReader.ReadString('\n')
 	return sanitizeInput(line)
@@ -59,9 +72,23 @@ func sanitizeInput(s string) string {
 
 // promptSelect displays numbered options and returns the selected value.
 func promptSelect(label string, options []string) string {
+	defer muteInfoLogs()()
 	fmt.Fprintf(os.Stderr, "%s:\n", label)
+	// The connector already numbers some option lists ("1. Mac…") for the
+	// Matrix bot; don't number those a second time.
+	prenumbered := true
 	for i, opt := range options {
-		fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, opt)
+		if !strings.HasPrefix(opt, fmt.Sprintf("%d. ", i+1)) {
+			prenumbered = false
+			break
+		}
+	}
+	for i, opt := range options {
+		if prenumbered {
+			fmt.Fprintf(os.Stderr, "  %s\n", opt)
+		} else {
+			fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, opt)
+		}
 	}
 	for {
 		fmt.Fprintf(os.Stderr, "Enter number (1-%d): ", len(options))
@@ -85,6 +112,7 @@ func promptSelect(label string, options []string) string {
 // all whitespace. Used for fields like hardware keys that are long base64
 // strings which get split across lines when pasted.
 func promptMultiline(label string) string {
+	defer muteInfoLogs()()
 	fmt.Fprintf(os.Stderr, "%s (paste, then press Enter on a blank line):\n", label)
 	var parts []string
 	for {
