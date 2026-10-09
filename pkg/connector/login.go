@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -946,8 +947,9 @@ func wantsSMS2FA(answer string) bool {
 // login flows can be tested without an Apple account.
 var submit2fa = safeSubmit2fa
 
-// postTwoFactorReloginFailed starts the error submit_2fa (pkg/rustpushgo/src/lib.rs)
-// returns when Apple accepted the code but the login re-run after it failed.
+// postTwoFactorReloginFailed is the prefix of the error submit_2fa
+// (pkg/rustpushgo/src/lib.rs) returns when Apple accepted the code but the
+// login re-run after it failed.
 const postTwoFactorReloginFailed = "Post-2FA re-login failed"
 
 // maxTwoFactorAttempts caps how many codes one login may try. Apple locks an
@@ -1006,7 +1008,7 @@ func (p *twoFactorPrompt) submit(
 		// verify_2fa and verify_sms_2fa), but no PET came back. Another code
 		// won't fix that.
 		log.Warn().Msg("2FA code was accepted but Apple issued no login token")
-		return nil, fmt.Errorf("the verification code was accepted, but Apple didn't finish signing in; start the login again")
+		return nil, twoFactorFailed("the verification code was accepted, but Apple didn't finish signing in; start the login again")
 	}
 	reason := err.Error()
 	var generic *rustpushgo.WrappedErrorGenericError
@@ -1017,14 +1019,22 @@ func (p *twoFactorPrompt) submit(
 		// The code was accepted and the login re-run after it failed. Saying
 		// the code was wrong and asking for another would be misleading.
 		log.Warn().Str("reason", reason).Msg("2FA code was accepted but the sign-in after it failed")
-		return nil, fmt.Errorf("the verification code was accepted, but signing in after it failed; start the login again")
+		return nil, twoFactorFailed("the verification code was accepted, but signing in after it failed; start the login again")
 	}
-	// Apple's reason (an error code, or a network error) goes to the log only;
-	// the user just needs to know the code didn't work.
+	// The reason (Apple's error code, a network error, or a recovered panic)
+	// goes to the log only; the user just needs to know the code didn't work.
 	log.Warn().Int("attempt", p.attempts).Str("reason", reason).Msg("2FA code was not accepted")
 	if p.attempts >= maxTwoFactorAttempts {
-		return nil, fmt.Errorf("the verification code didn't work %d times; start the login again to get a new code", p.attempts)
+		return nil, twoFactorFailed(fmt.Sprintf("the verification code didn't work %d times; start the login again to get a new code", p.attempts))
 	}
 	return p.step(fmt.Sprintf("That code didn't work. Check it and try again (attempt %d of %d).",
 		p.attempts+1, maxTwoFactorAttempts)), nil
+}
+
+// twoFactorFailed is the error that ends a login at the 2FA step. It's a
+// bridgev2.RespError so the provisioning API (the Beeper app's login) shows
+// msg instead of a generic "Internal error submitting input"; the terminal
+// login and bot commands print it as is.
+func twoFactorFailed(msg string) error {
+	return bridgev2.RespError{ErrCode: "FI.MAU.IMESSAGE.2FA_FAILED", Err: msg, StatusCode: http.StatusBadRequest}
 }

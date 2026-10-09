@@ -2,6 +2,8 @@ package connector
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -208,5 +210,37 @@ func TestLoginFlowsOfferTwoFactorAgainOnRejectedCode(t *testing.T) {
 				t.Errorf("sent %d codes, want %d", len(sent), maxTwoFactorAttempts)
 			}
 		})
+	}
+}
+
+// The provisioning API (the Beeper app's login) only shows an error's text when
+// it can write itself as an HTTP error; anything else becomes "Internal error
+// submitting input". So every error that ends the login at the 2FA step must
+// be one.
+func TestTwoFactorFailuresReachTheBeeperApp(t *testing.T) {
+	cases := map[string][]func() (bool, error){
+		"out of attempts": {rejected, rejected, rejected},
+		"no PET":          {func() (bool, error) { return false, nil }},
+		"re-login failed": {func() (bool, error) {
+			return false, rustpushgo.NewWrappedErrorGenericError("Post-2FA re-login failed: AuthSrp")
+		}},
+	}
+	for name, answers := range cases {
+		p := twoFactorPrompt{instructions: "x"}
+		f := &fakeVerify{answers: answers}
+		var err error
+		for range answers {
+			_, err = p.submit(zerolog.Nop(), "123456", f.verify, nil)
+		}
+		var we interface{ Write(http.ResponseWriter) }
+		if !errors.As(err, &we) {
+			t.Errorf("%s: %T would show as a generic error in the Beeper app", name, err)
+			continue
+		}
+		rec := httptest.NewRecorder()
+		we.Write(rec)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "start the login again") {
+			t.Errorf("%s: provisioning would answer %d %s", name, rec.Code, rec.Body.String())
+		}
 	}
 }
