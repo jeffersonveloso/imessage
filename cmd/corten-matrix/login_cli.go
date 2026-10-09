@@ -39,8 +39,19 @@ func muteInfoLogs() (restore func()) {
 func prompt(label string) string {
 	defer muteInfoLogs()()
 	fmt.Fprintf(os.Stderr, "%s: ", label)
-	line, _ := stdinReader.ReadString('\n')
-	return sanitizeInput(line)
+	return sanitizeInput(readLine())
+}
+
+// readLine reads one line of input, and ends the login when stdin is closed
+// (Ctrl-D, or no terminal attached) with nothing left to read. Treating that as
+// an empty answer would spin forever on any step that asks again.
+func readLine() string {
+	line, err := stdinReader.ReadString('\n')
+	if err != nil && line == "" {
+		fmt.Fprintln(os.Stderr, "\n[!] Input closed; login canceled.")
+		os.Exit(1)
+	}
+	return line
 }
 
 // sanitizeInput strips terminal bracketed-paste markers (ESC[200~ … ESC[201~)
@@ -92,7 +103,7 @@ func promptSelect(label string, options []string) string {
 	}
 	for {
 		fmt.Fprintf(os.Stderr, "Enter number (1-%d): ", len(options))
-		line, _ := stdinReader.ReadString('\n')
+		line := readLine()
 		trimmed := strings.TrimSpace(line)
 		var idx int
 		if _, err := fmt.Sscanf(trimmed, "%d", &idx); err == nil && idx >= 1 && idx <= len(options) {
@@ -160,8 +171,8 @@ func runInteractiveLogin(br *mxmain.BridgeMain) {
 	//
 	// This used to wrap context.Background() in context.WithCancel and discard
 	// the cancel func, which go vet flags as a context leak. Since the cancel
-	// was never called the context could never be cancelled, so it behaved
-	// exactly as its parent — dropping WithCancel is behaviour-identical and
+	// was never called the context could never be canceled, so it behaved
+	// exactly as its parent — dropping WithCancel is behavior-identical and
 	// leaks nothing.
 	br.Bridge.BackgroundCtx = br.Log.WithContext(context.Background())
 
