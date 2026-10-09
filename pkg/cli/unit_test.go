@@ -529,3 +529,66 @@ func TestDecideDuplicateUnit(t *testing.T) {
 		}
 	}
 }
+
+// `sudo corten-matrix install-service` over an existing user install used to
+// write and start a system unit beside it: under sudo, scope resolution only
+// sees root's user manager, so the user's own unit was invisible to it.
+func TestSystemUnitWouldDuplicate(t *testing.T) {
+	const unit = "/home/david/.config/systemd/user/corten-matrix.service"
+	cases := []struct {
+		name       string
+		euid       int
+		sudoUser   string
+		userUnit   string
+		systemUnit bool
+		want       bool
+	}{
+		{"sudo over a user install", 0, "david", unit, false, true},
+		{"user without a reachable user bus", 1000, "", unit, false, true},
+		{"sudo, fresh install", 0, "david", "", false, false},
+		{"root without sudo: heal keeps the system unit", 0, "", unit, false, false},
+		{"system unit already there: re-install it", 0, "david", unit, true, false},
+	}
+	for _, c := range cases {
+		if got := systemUnitWouldDuplicate(c.euid, c.sudoUser, c.userUnit, c.systemUnit); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestExistingUserUnitChecksBothConfigDirs(t *testing.T) {
+	home := t.TempDir()
+	write := func(dir string) string {
+		t.Helper()
+		path := filepath.Join(dir, "corten-matrix.service")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("[Unit]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", "")
+	if got := existingUserUnit(home); got != "" {
+		t.Fatalf("no unit installed, got %q", got)
+	}
+
+	// Written by the scripts (always ~/.config), looked up with a custom
+	// XDG_CONFIG_HOME still set, as under `sudo -E`.
+	scripts := write(filepath.Join(home, ".config", "systemd", "user"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	if got := existingUserUnit(home); got != scripts {
+		t.Errorf("got %q, want the scripts' unit %q", got, scripts)
+	}
+	if err := os.Remove(scripts); err != nil {
+		t.Fatal(err)
+	}
+
+	// Written under a custom XDG_CONFIG_HOME, which is still set.
+	custom := write(filepath.Join(home, "xdg", "systemd", "user"))
+	if got := existingUserUnit(home); got != custom {
+		t.Errorf("got %q, want %q", got, custom)
+	}
+}

@@ -6,7 +6,7 @@
 //
 // Design:
 //   - setup / setup-beeper / reset run the project's existing shell scripts,
-//     embedded into the binary (so behaviour matches what users know today).
+//     embedded into the binary (so behavior matches what users know today).
 //   - start / stop / restart / status / logs / bbctl are handled natively
 //     (launchd on macOS, systemd --user on Linux).
 //   - Docker-aware: inside a container, host-lifecycle commands no-op because
@@ -46,7 +46,7 @@ const cortenBundleID = "com.lrhodin.corten-matrix"
 // home. That split is exactly the "logged in fine under /home/<user>, then a
 // later run provisioned fresh under /root and failed" symptom. When running as
 // root with a real $SUDO_USER, use that user's home; otherwise (a normal user,
-// or true root in an LXC container) keep the existing $HOME behaviour.
+// or true root in an LXC container) keep the existing $HOME behavior.
 func effectiveHome() string {
 	if os.Geteuid() == 0 {
 		if su := os.Getenv("SUDO_USER"); su != "" && su != "root" {
@@ -226,6 +226,34 @@ func decideDuplicateUnit(root, inUser, inSystem bool) duplicateUnitAction {
 	default:
 		return duplicateWarn
 	}
+}
+
+// existingUserUnit returns the bridge's user unit file for home, or "" if there
+// is none. Both places are checked: userUnitDir follows XDG_CONFIG_HOME, which
+// sudo usually drops, while the install scripts always write under ~/.config.
+func existingUserUnit(home string) string {
+	for _, dir := range []string{userUnitDir(home), filepath.Join(home, ".config", "systemd", "user")} {
+		path := filepath.Join(dir, "corten-matrix.service")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// systemUnitWouldDuplicate says whether install-service must refuse to write a
+// NEW system unit because this user already has the bridge as a user unit
+// (userUnit, "" if none). Under sudo, scope resolution only sees root's user
+// manager, so it picks system scope and would start a second bridge beside the
+// user's own; a user whose manager can't be reached lands there too. An
+// existing system unit is left alone (re-installing it adds nothing new, and
+// healDuplicateUnits already reports the pair). Root without sudo is left to
+// healDuplicateUnits, which keeps the system unit by design.
+func systemUnitWouldDuplicate(euid int, sudoUser, userUnit string, systemUnitExists bool) bool {
+	if userUnit == "" || systemUnitExists || (euid == 0 && sudoUser == "") {
+		return false
+	}
+	return true
 }
 
 // healDuplicateUnits resolves a bridge unit installed in both scopes before a
@@ -943,6 +971,19 @@ func serviceInstall() {
 	// Resolve once and reuse `base` for the daemon-reload and enable below, so
 	// those cannot land in a different scope than the one just written.
 	base, system := linuxSystemctlFor("corten-matrix.service")
+	if userUnit := existingUserUnit(effectiveHome()); system && userUnit != "" &&
+		systemUnitWouldDuplicate(os.Geteuid(), os.Getenv("SUDO_USER"), userUnit, systemdUnitExists(false, "corten-matrix.service")) {
+		fmt.Printf("%s!%s corten-matrix is already installed as a user service (%s).\n", cRed, cReset, userUnit)
+		fmt.Println("  Installing a system service beside it would run a second bridge on the same config,")
+		fmt.Println("  and the two would knock each other off Beeper. The service was not changed.")
+		fmt.Println()
+		if os.Getenv("SUDO_USER") != "" {
+			fmt.Println("  To keep the user service, manage it without sudo: corten-matrix start | stop | restart")
+		}
+		fmt.Println("  To switch to a system service, remove the user one first, as that user:")
+		fmt.Printf("    systemctl --user disable --now corten-matrix.service; rm -f %s\n", userUnit)
+		os.Exit(1)
+	}
 	dir := userUnitDir(effectiveHome())
 	wantedBy := "default.target"
 	if system {
